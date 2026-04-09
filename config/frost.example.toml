@@ -1,0 +1,55 @@
+# frost.toml — Iceberg table health check configuration
+#
+# Copy this file to frost.toml and customize for your environment.
+
+[catalog]
+type = "rest"
+uri = "http://localhost:8181"
+warehouse = "s3://my-bucket/warehouse"
+
+# Alternatively, use AWS Glue:
+# [catalog]
+# type = "glue"
+# region = "us-east-1"
+# warehouse = "s3://my-bucket/warehouse"
+
+# Or a local filesystem (for development):
+# [catalog]
+# type = "filesystem"
+# warehouse = "./warehouse"
+
+[thresholds]
+# Files smaller than this are flagged as "small files" (bytes).
+small_file_bytes = 8_388_608            # 8 MB
+
+# Maximum number of snapshots before flagging bloat.
+max_snapshots = 100
+
+# Maximum age of oldest snapshot (days).
+max_snapshot_age_days = 7
+
+# Flag if any partition has more than this ratio × median file count.
+partition_skew_ratio = 10.0
+
+# Maximum outstanding delete files before flagging.
+max_delete_files = 50
+
+# Hours since last commit before a table is considered stale.
+stale_table_hours = 48
+
+# Maximum total metadata size (bytes).
+max_metadata_bytes = 524_288_000        # 500 MB
+
+[cost]
+# S3 Standard storage pricing (USD per GB per month).
+s3_storage_per_gb_month = 0.023
+
+# S3 GET request pricing (USD per 1000 requests).
+s3_get_request_per_1000 = 0.0004
+
+# AWS region (for pricing context).
+region = "us-east-1"
+
+[output]
+# Default output format: "pretty", "json", or "github-actions".
+default_format = "pretty"

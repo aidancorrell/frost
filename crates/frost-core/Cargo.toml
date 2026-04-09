@@ -1,0 +1,16 @@
+[package]
+name = "frost-core"
+description = "Iceberg table health check engine — metadata-only analysis, cost estimation, and fix generation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+toml = "0.8"
+bytesize = { version = "2", features = ["serde"] }

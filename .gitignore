@@ -1,0 +1,23 @@
+/target
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# frost runtime
+frost-watch.db
+frost-watch.db-journal
+
+# Environment
+.env
+.env.local

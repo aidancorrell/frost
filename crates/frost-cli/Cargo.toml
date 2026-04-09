@@ -1,0 +1,21 @@
+[package]
+name = "frost-cli"
+description = "CLI for frost — Iceberg table health checks for humans"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "frost"
+path = "src/main.rs"
+
+[dependencies]
+frost-core = { workspace = true }
+clap = { version = "4", features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+comfy-table = "7"
+colored = "3"
+chrono = { workspace = true }
