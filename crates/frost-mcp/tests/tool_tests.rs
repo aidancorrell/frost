@@ -192,8 +192,13 @@ async fn get_cost_report_returns_items() {
 // --- watch_status ---
 
 #[tokio::test]
-async fn watch_status_returns_not_running() {
-    let config = FrostConfig::default();
+async fn watch_status_returns_no_data() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let db_path = tmp.path().join("frost-watch.db");
+
+    let mut config = FrostConfig::default();
+    config.watch.sqlite_path = db_path.to_string_lossy().to_string();
+
     let server = FrostServer::new(config);
     let result = server
         .run_watch_status(frost_mcp::tools::WatchStatusParams {
@@ -202,5 +207,7 @@ async fn watch_status_returns_not_running() {
         .await;
 
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
-    assert_eq!(parsed["status"], "not_running");
+    // Database is created but empty — "no_data" status.
+    assert_eq!(parsed["status"], "no_data");
+    assert_eq!(parsed["tables_watched"], 0);
 }

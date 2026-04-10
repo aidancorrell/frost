@@ -69,6 +69,38 @@ enum Commands {
         #[arg(long, short, value_enum, default_value = "pretty")]
         format: Format,
     },
+    /// Start watch mode — periodically check all tables and alert on changes.
+    Watch {
+        /// Check interval (e.g., "30m", "1h", "6h"). Overrides config.
+        #[arg(long)]
+        interval: Option<String>,
+
+        /// Webhook URL for alerts.
+        #[arg(long)]
+        webhook: Option<String>,
+
+        /// Optional namespace filter.
+        #[arg(long)]
+        namespace: Option<String>,
+
+        /// SQLite database path for state.
+        #[arg(long, default_value = "./frost-watch.db")]
+        db: String,
+    },
+    /// Show current watch mode status from the state database.
+    WatchStatus {
+        /// Optional table filter.
+        #[arg(long)]
+        table: Option<String>,
+
+        /// SQLite database path.
+        #[arg(long, default_value = "./frost-watch.db")]
+        db: String,
+
+        /// Output format.
+        #[arg(long, short, value_enum, default_value = "pretty")]
+        format: Format,
+    },
 }
 
 #[derive(Clone, ValueEnum)]
@@ -179,6 +211,127 @@ async fn main() {
                         finding
                     );
                     std::process::exit(1);
+                }
+            }
+        }
+        Commands::Watch {
+            interval,
+            webhook,
+            namespace,
+            db,
+        } => {
+            // Override watch config from CLI flags.
+            if let Some(interval) = interval {
+                config.watch.interval = interval;
+            }
+            if let Some(webhook) = webhook {
+                config.watch.webhook_url = Some(webhook);
+            }
+            if namespace.is_some() {
+                config.watch.namespace = namespace;
+            }
+            config.watch.sqlite_path = db;
+
+            // Validate interval before starting.
+            if let Err(e) = frost_core::watch::parse_interval(&config.watch.interval) {
+                eprintln!("{} {}", "error:".red().bold(), e);
+                std::process::exit(1);
+            }
+
+            println!(
+                "{} Starting watch mode (interval: {}, db: {})",
+                "frost".cyan().bold(),
+                config.watch.interval,
+                config.watch.sqlite_path
+            );
+            if let Some(ref url) = config.watch.webhook_url {
+                println!("  Webhook: {}", url);
+            }
+            if let Some(ref ns) = config.watch.namespace {
+                println!("  Namespace filter: {}", ns);
+            }
+            println!("  Press Ctrl+C to stop.");
+            println!();
+
+            if let Err(e) = frost_core::watch::run_watch_loop(&config).await {
+                eprintln!("{} Watch mode failed: {}", "error:".red().bold(), e);
+                std::process::exit(1);
+            }
+        }
+        Commands::WatchStatus { table, db, format } => {
+            let watch_db = match frost_core::watch::WatchDb::open(&db) {
+                Ok(db) => db,
+                Err(e) => {
+                    eprintln!("{} Failed to open watch database: {}", "error:".red().bold(), e);
+                    std::process::exit(1);
+                }
+            };
+
+            match format {
+                Format::Json => {
+                    let latest = if let Some(ref t) = table {
+                        watch_db
+                            .get_latest_report(t)
+                            .unwrap_or(None)
+                            .into_iter()
+                            .collect::<Vec<_>>()
+                    } else {
+                        watch_db.get_all_latest().unwrap_or_default()
+                    };
+                    let alerts = watch_db.get_alerts(table.as_deref(), 10).unwrap_or_default();
+
+                    let output = serde_json::json!({
+                        "tables": latest,
+                        "recent_alerts": alerts,
+                    });
+                    println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                }
+                _ => {
+                    let latest = if let Some(ref t) = table {
+                        watch_db
+                            .get_latest_report(t)
+                            .unwrap_or(None)
+                            .into_iter()
+                            .collect::<Vec<_>>()
+                    } else {
+                        watch_db.get_all_latest().unwrap_or_default()
+                    };
+
+                    if latest.is_empty() {
+                        println!("No watch data found. Run {} to start monitoring.", "frost watch".bold());
+                    } else {
+                        println!("{}", "Watch Status".bold().underline());
+                        println!();
+                        for report in &latest {
+                            let severity_colored = match report.severity.as_str() {
+                                "PASS" => report.severity.green().to_string(),
+                                "WARNING" => report.severity.yellow().to_string(),
+                                "CRITICAL" => report.severity.red().bold().to_string(),
+                                _ => report.severity.clone(),
+                            };
+                            println!(
+                                "  {} — {} ({} findings, last checked: {})",
+                                report.table_name.bold(),
+                                severity_colored,
+                                report.finding_count,
+                                report.checked_at.format("%Y-%m-%d %H:%M UTC"),
+                            );
+                        }
+
+                        let alerts = watch_db.get_alerts(table.as_deref(), 5).unwrap_or_default();
+                        if !alerts.is_empty() {
+                            println!();
+                            println!("{}", "Recent Alerts".bold().underline());
+                            for alert in &alerts {
+                                println!(
+                                    "  [{}] {} — {}",
+                                    alert.alerted_at.format("%Y-%m-%d %H:%M"),
+                                    alert.table_name,
+                                    alert.message
+                                );
+                            }
+                        }
+                    }
                 }
             }
         }

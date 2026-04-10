@@ -68,4 +68,25 @@ pub struct TableBrief {
 pub struct WatchStatusResponse {
     pub status: String,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tables_watched: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub table_health: Option<Vec<WatchTableHealth>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recent_alerts: Option<Vec<WatchAlertBrief>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WatchTableHealth {
+    pub table_name: String,
+    pub severity: String,
+    pub finding_count: usize,
+    pub last_checked: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WatchAlertBrief {
+    pub table_name: String,
+    pub message: String,
+    pub alerted_at: String,
 }

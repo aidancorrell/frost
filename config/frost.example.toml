@@ -53,3 +53,16 @@ region = "us-east-1"
 [output]
 # Default output format: "pretty", "json", or "github-actions".
 default_format = "pretty"
+
+[watch]
+# Check interval: "30m", "1h", "6h", "1d". Default: "6h".
+interval = "6h"
+
+# Webhook URL for alerts (Slack incoming webhook, generic HTTP POST).
+# webhook_url = "https://hooks.slack.com/services/T.../B.../..."
+
+# Path to SQLite database for health history.
+sqlite_path = "./frost-watch.db"
+
+# Optional namespace filter — only watch tables in this namespace.
+# namespace = "production"

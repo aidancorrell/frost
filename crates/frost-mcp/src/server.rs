@@ -168,17 +168,86 @@ impl FrostServer {
 
     /// Query watch mode state (public for testing).
     pub async fn run_watch_status(&self, params: WatchStatusParams) -> String {
-        let response = WatchStatusResponse {
-            status: "not_running".to_string(),
-            message: format!(
-                "Watch mode is not yet active. Start it with: frost watch{}",
-                params
-                    .table
-                    .as_ref()
-                    .map(|t| format!(" --table {}", t))
-                    .unwrap_or_default()
-            ),
+        use frost_core::watch::WatchDb;
+
+        // Try to open the watch database.
+        let db = match WatchDb::open(&self.config.watch.sqlite_path) {
+            Ok(db) => db,
+            Err(_) => {
+                // No database — watch mode hasn't been run.
+                return serde_json::to_string_pretty(&WatchStatusResponse {
+                    status: "not_configured".to_string(),
+                    message: format!(
+                        "Watch mode database not found at '{}'. Start it with: frost watch",
+                        self.config.watch.sqlite_path
+                    ),
+                    tables_watched: None,
+                    table_health: None,
+                    recent_alerts: None,
+                })
+                .unwrap();
+            }
         };
+
+        // Get latest health state.
+        let latest = if let Some(ref table) = params.table {
+            db.get_latest_report(table)
+                .unwrap_or(None)
+                .into_iter()
+                .collect::<Vec<_>>()
+        } else {
+            db.get_all_latest().unwrap_or_default()
+        };
+
+        if latest.is_empty() {
+            return serde_json::to_string_pretty(&WatchStatusResponse {
+                status: "no_data".to_string(),
+                message: "Watch database exists but contains no check results. Run 'frost watch' to start monitoring.".to_string(),
+                tables_watched: Some(0),
+                table_health: None,
+                recent_alerts: None,
+            })
+            .unwrap();
+        }
+
+        let table_health: Vec<WatchTableHealth> = latest
+            .iter()
+            .map(|r| WatchTableHealth {
+                table_name: r.table_name.clone(),
+                severity: r.severity.clone(),
+                finding_count: r.finding_count,
+                last_checked: r.checked_at.to_rfc3339(),
+            })
+            .collect();
+
+        let alerts = db
+            .get_alerts(params.table.as_deref(), 10)
+            .unwrap_or_default();
+        let alert_briefs: Vec<WatchAlertBrief> = alerts
+            .iter()
+            .map(|a| WatchAlertBrief {
+                table_name: a.table_name.clone(),
+                message: a.message.clone(),
+                alerted_at: a.alerted_at.to_rfc3339(),
+            })
+            .collect();
+
+        let response = WatchStatusResponse {
+            status: "has_data".to_string(),
+            message: format!(
+                "{} table(s) monitored, {} recent alert(s)",
+                table_health.len(),
+                alert_briefs.len()
+            ),
+            tables_watched: Some(table_health.len()),
+            table_health: Some(table_health),
+            recent_alerts: if alert_briefs.is_empty() {
+                None
+            } else {
+                Some(alert_briefs)
+            },
+        };
+
         serde_json::to_string_pretty(&response).unwrap()
     }
 }

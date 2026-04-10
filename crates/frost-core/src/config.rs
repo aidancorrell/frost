@@ -1,3 +1,4 @@
+use crate::watch::WatchConfig;
 use serde::{Deserialize, Serialize};
 
 /// Top-level frost configuration, typically loaded from frost.toml.
@@ -8,6 +9,7 @@ pub struct FrostConfig {
     pub thresholds: Thresholds,
     pub cost: CostConfig,
     pub output: OutputConfig,
+    pub watch: WatchConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +84,7 @@ impl Default for FrostConfig {
             thresholds: Thresholds::default(),
             cost: CostConfig::default(),
             output: OutputConfig::default(),
+            watch: WatchConfig::default(),
         }
     }
 }

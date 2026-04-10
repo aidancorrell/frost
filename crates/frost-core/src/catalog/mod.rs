@@ -4,6 +4,8 @@
 //! works against this trait, making it easy to swap between Glue, REST, filesystem,
 //! or test fixtures.
 
+pub mod glue;
+
 use crate::config::CatalogConfig;
 use crate::metadata::TableMetadata;
 use crate::parse::{manifest, metadata_json};
@@ -384,9 +386,11 @@ pub fn from_config(config: &CatalogConfig) -> Result<Box<dyn CatalogProvider>, C
         CatalogConfig::Rest { uri, .. } => Err(CatalogError::NotImplemented(format!(
             "REST catalog at '{uri}'"
         ))),
-        CatalogConfig::Glue { region, .. } => Err(CatalogError::NotImplemented(format!(
-            "Glue catalog in region {:?}",
-            region
+        CatalogConfig::Glue {
+            region, warehouse, ..
+        } => Ok(Box::new(glue::GlueCatalog::new(
+            region.clone(),
+            warehouse.clone(),
         ))),
     }
 }
