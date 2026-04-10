@@ -8,7 +8,8 @@
 //! - `get_cost_report` — Estimate monthly cost waste
 //! - `watch_status` — Query watch mode state (requires watch daemon)
 //!
-//! Supports stdio and HTTP/SSE transports.
+//! Supports stdio transport (for Claude Code, Cursor, local agents) and
+//! will support HTTP/SSE transport (for shared team servers) in a future release.
 
 pub mod server;
 pub mod tools;
