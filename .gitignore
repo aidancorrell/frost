@@ -1,7 +1,7 @@
 /target
+**/target
 **/*.rs.bk
 *.pdb
-Cargo.lock
 
 # IDE
 .idea/
@@ -21,3 +21,9 @@ frost-watch.db-journal
 # Environment
 .env
 .env.local
+
+# Docker
+docker-compose.override.yml
+
+# Test artifacts
+/tmp/
