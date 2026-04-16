@@ -48,12 +48,19 @@ async fn small_files_detected() {
     fixture_helpers::create_small_files_table(tmp.path());
 
     let catalog = FilesystemCatalog::new(tmp.path());
-    let meta = catalog.load_table("test_ns.small_files_table").await.unwrap();
+    let meta = catalog
+        .load_table("test_ns.small_files_table")
+        .await
+        .unwrap();
 
     let config = FrostConfig::default();
     let report = engine::check_table(&meta, &config);
 
-    let finding = report.findings.iter().find(|f| f.check_id == "small_files").unwrap();
+    let finding = report
+        .findings
+        .iter()
+        .find(|f| f.check_id == "small_files")
+        .unwrap();
     assert!(
         finding.severity >= Severity::Warning,
         "Small files should be flagged: {:?} - {}",
@@ -184,7 +191,10 @@ async fn cost_report_for_table_with_issues() {
     fixture_helpers::create_small_files_table(tmp.path());
 
     let catalog = FilesystemCatalog::new(tmp.path());
-    let meta = catalog.load_table("test_ns.small_files_table").await.unwrap();
+    let meta = catalog
+        .load_table("test_ns.small_files_table")
+        .await
+        .unwrap();
 
     let config = FrostConfig::default();
     let cost_report = frost_core::cost::estimate_cost(&meta, &config.cost);
@@ -202,7 +212,10 @@ async fn fix_generation_for_findings() {
     fixture_helpers::create_small_files_table(tmp.path());
 
     let catalog = FilesystemCatalog::new(tmp.path());
-    let meta = catalog.load_table("test_ns.small_files_table").await.unwrap();
+    let meta = catalog
+        .load_table("test_ns.small_files_table")
+        .await
+        .unwrap();
 
     // Test fix generation for small_files.
     let fix = frost_core::fix::generate_fix(&meta, "small_files");

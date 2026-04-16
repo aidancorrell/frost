@@ -33,7 +33,12 @@ async fn check_table_returns_findings() {
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
     assert!(parsed["findings"].is_array());
     assert!(!parsed["findings"].as_array().unwrap().is_empty());
-    assert!(parsed["table_name"].as_str().unwrap().contains("small_files"));
+    assert!(
+        parsed["table_name"]
+            .as_str()
+            .unwrap()
+            .contains("small_files")
+    );
 }
 
 #[tokio::test]
@@ -102,9 +107,7 @@ async fn check_catalog_lists_all_tables() {
 
     let server = FrostServer::new(config);
     let result = server
-        .run_check_catalog(frost_mcp::tools::CheckCatalogParams {
-            namespace: None,
-        })
+        .run_check_catalog(frost_mcp::tools::CheckCatalogParams { namespace: None })
         .await;
 
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
@@ -135,7 +138,12 @@ async fn get_fix_returns_command() {
         .await;
 
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
-    assert!(parsed["command"].as_str().unwrap().contains("rewrite_data_files"));
+    assert!(
+        parsed["command"]
+            .as_str()
+            .unwrap()
+            .contains("rewrite_data_files")
+    );
 }
 
 #[tokio::test]
@@ -201,9 +209,7 @@ async fn watch_status_returns_no_data() {
 
     let server = FrostServer::new(config);
     let result = server
-        .run_watch_status(frost_mcp::tools::WatchStatusParams {
-            table: None,
-        })
+        .run_watch_status(frost_mcp::tools::WatchStatusParams { table: None })
         .await;
 
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();

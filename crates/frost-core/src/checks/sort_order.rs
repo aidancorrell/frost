@@ -37,7 +37,11 @@ impl HealthCheck for SortOrderCheck {
         // metadata-only design), we can only report that a sort order is declared
         // and suggest validation. In a future version, we could sample manifest
         // entries' lower/upper bounds to infer sort compliance.
-        let field_names: Vec<&str> = sort_order.fields.iter().map(|f| f.transform.as_str()).collect();
+        let field_names: Vec<&str> = sort_order
+            .fields
+            .iter()
+            .map(|f| f.transform.as_str())
+            .collect();
 
         Finding {
             check_id: self.id().to_string(),

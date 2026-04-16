@@ -82,7 +82,8 @@ pub fn generate_fix(table: &TableMetadata, finding_id: &str) -> Option<FixComman
                          into data files, eliminating merge-on-read overhead."
                 .to_string(),
             warnings: vec![
-                "This is a rewrite operation that creates new data files and snapshots.".to_string(),
+                "This is a rewrite operation that creates new data files and snapshots."
+                    .to_string(),
             ],
         }),
         "metadata_size" => Some(FixCommand {

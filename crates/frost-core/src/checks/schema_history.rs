@@ -51,7 +51,7 @@ impl HealthCheck for SchemaHistoryCheck {
                 .collect();
 
             // Dropped columns.
-            for (name, _) in &old_fields {
+            for name in old_fields.keys() {
                 if !new_fields.contains_key(name) {
                     breaking_changes.push(format!(
                         "Column '{}' dropped (schema {} → {})",
@@ -61,7 +61,7 @@ impl HealthCheck for SchemaHistoryCheck {
             }
 
             // Added columns.
-            for (name, _) in &new_fields {
+            for name in new_fields.keys() {
                 if !old_fields.contains_key(name) {
                     additive_changes.push(format!(
                         "Column '{}' added (schema {} → {})",
@@ -72,13 +72,13 @@ impl HealthCheck for SchemaHistoryCheck {
 
             // Type changes.
             for (name, old_type) in &old_fields {
-                if let Some(new_type) = new_fields.get(name) {
-                    if old_type != new_type {
-                        breaking_changes.push(format!(
-                            "Column '{}' type changed: {} → {} (schema {} → {})",
-                            name, old_type, new_type, old.schema_id, new.schema_id,
-                        ));
-                    }
+                if let Some(new_type) = new_fields.get(name)
+                    && old_type != new_type
+                {
+                    breaking_changes.push(format!(
+                        "Column '{}' type changed: {} → {} (schema {} → {})",
+                        name, old_type, new_type, old.schema_id, new.schema_id,
+                    ));
                 }
             }
         }

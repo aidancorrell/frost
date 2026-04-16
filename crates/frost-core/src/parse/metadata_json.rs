@@ -128,8 +128,7 @@ pub fn parse_metadata_json(
     json_str: &str,
     table_name: &str,
 ) -> Result<TableMetadata, MetadataParseError> {
-    let raw: RawMetadata =
-        serde_json::from_str(json_str).map_err(MetadataParseError::JsonParse)?;
+    let raw: RawMetadata = serde_json::from_str(json_str).map_err(MetadataParseError::JsonParse)?;
 
     // Resolve schemas.
     let schemas = if !raw.schemas.is_empty() {
@@ -145,10 +144,12 @@ pub fn parse_metadata_json(
         .iter()
         .find(|s| s.schema_id == current_schema_id)
         .cloned()
-        .unwrap_or_else(|| schemas.first().cloned().unwrap_or(Schema {
-            schema_id: 0,
-            fields: vec![],
-        }));
+        .unwrap_or_else(|| {
+            schemas.first().cloned().unwrap_or(Schema {
+                schema_id: 0,
+                fields: vec![],
+            })
+        });
 
     // Resolve partition spec.
     let default_spec_id = raw.default_spec_id.unwrap_or(0);
@@ -156,11 +157,11 @@ pub fn parse_metadata_json(
         raw.partition_specs
             .iter()
             .find(|s| s.spec_id == default_spec_id)
-            .map(|s| convert_partition_spec(s))
+            .map(convert_partition_spec)
             .unwrap_or_else(|| {
                 raw.partition_specs
                     .first()
-                    .map(|s| convert_partition_spec(s))
+                    .map(convert_partition_spec)
                     .unwrap_or(PartitionSpec {
                         spec_id: 0,
                         fields: vec![],

@@ -80,14 +80,28 @@ fn get_history_returns_most_recent_first() {
 fn get_all_latest_returns_one_per_table() {
     let db = WatchDb::open_in_memory().unwrap();
 
-    db.store_report(&make_report("ns.table_a", Severity::Pass, &[])).unwrap();
-    db.store_report(&make_report("ns.table_b", Severity::Warning, &["small_files"])).unwrap();
-    db.store_report(&make_report("ns.table_a", Severity::Critical, &["snapshot_bloat"])).unwrap();
+    db.store_report(&make_report("ns.table_a", Severity::Pass, &[]))
+        .unwrap();
+    db.store_report(&make_report(
+        "ns.table_b",
+        Severity::Warning,
+        &["small_files"],
+    ))
+    .unwrap();
+    db.store_report(&make_report(
+        "ns.table_a",
+        Severity::Critical,
+        &["snapshot_bloat"],
+    ))
+    .unwrap();
 
     let latest = db.get_all_latest().unwrap();
     assert_eq!(latest.len(), 2);
 
-    let table_a = latest.iter().find(|r| r.table_name == "ns.table_a").unwrap();
+    let table_a = latest
+        .iter()
+        .find(|r| r.table_name == "ns.table_a")
+        .unwrap();
     assert_eq!(table_a.severity, "CRITICAL");
 }
 

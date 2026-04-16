@@ -120,7 +120,11 @@ mod tests {
         meta.data_files = (0..200)
             .map(|i| DataFile {
                 file_path: format!("s3://bucket/data/part-{i}.parquet"),
-                file_size_bytes: if i < 30 { 1024 * 100 } else { 100 * 1024 * 1024 }, // 30 small files
+                file_size_bytes: if i < 30 {
+                    1024 * 100
+                } else {
+                    100 * 1024 * 1024
+                }, // 30 small files
                 record_count: if i < 30 { 100 } else { 1_000_000 },
                 partition: Default::default(),
                 file_format: FileFormat::Parquet,

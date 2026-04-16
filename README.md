@@ -281,11 +281,13 @@ type = "glue"
 region = "us-east-1"
 warehouse = "s3://my-bucket/warehouse"
 
-# Iceberg REST Catalog
+# Iceberg REST Catalog (Polaris, Lakekeeper, Unity, Gravitino, Nessie, etc.)
 [catalog]
 type = "rest"
 uri = "http://localhost:8181"
 warehouse = "s3://my-bucket/warehouse"
+# token = "my-bearer-token"       # Optional: Bearer token for auth
+# prefix = "my_catalog"           # Optional: REST catalog prefix
 
 # Local filesystem (development)
 [catalog]
@@ -349,7 +351,7 @@ python generate_pathologies.py
 
 ### Test Coverage
 
-- 38 tests across the workspace
+- 46 tests across the workspace
 - Unit tests for individual health checks
 - Integration tests with real Iceberg metadata (Avro manifests)
 - MCP tool handler tests

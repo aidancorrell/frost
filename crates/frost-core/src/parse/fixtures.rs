@@ -30,7 +30,7 @@ pub fn create_healthy_table(root: &Path) {
             (
                 path.to_string_lossy().to_string(),
                 128 * 1024 * 1024_i64, // 128MB reported size
-                1_500_000_i64,          // records
+                1_500_000_i64,         // records
             )
         })
         .collect();
@@ -81,7 +81,11 @@ pub fn create_healthy_table(root: &Path) {
     });
 
     let metadata_path = metadata_dir.join("v1.metadata.json");
-    std::fs::write(&metadata_path, serde_json::to_string_pretty(&metadata).unwrap()).unwrap();
+    std::fs::write(
+        &metadata_path,
+        serde_json::to_string_pretty(&metadata).unwrap(),
+    )
+    .unwrap();
 
     // Version hint.
     std::fs::write(metadata_dir.join("version-hint.text"), "1").unwrap();
@@ -103,8 +107,8 @@ pub fn create_small_files_table(root: &Path) {
         std::fs::write(&path, &vec![0u8; 512]).unwrap();
         data_files.push((
             path.to_string_lossy().to_string(),
-            100 * 1024_i64,  // 100KB — well under 8MB threshold
-            500_i64,         // records
+            100 * 1024_i64, // 100KB — well under 8MB threshold
+            500_i64,        // records
         ));
     }
     for i in 0..10 {
@@ -124,7 +128,11 @@ pub fn create_small_files_table(root: &Path) {
     let manifest_list_path = metadata_dir.join("snap-1-manifest-list.avro");
     write_manifest_list_file(
         &manifest_list_path,
-        &[(manifest_path.to_string_lossy().to_string(), data_files.len() as i32, 0)],
+        &[(
+            manifest_path.to_string_lossy().to_string(),
+            data_files.len() as i32,
+            0,
+        )],
     );
 
     let now_ms = chrono::Utc::now().timestamp_millis();
@@ -158,7 +166,8 @@ pub fn create_small_files_table(root: &Path) {
     std::fs::write(
         metadata_dir.join("v1.metadata.json"),
         serde_json::to_string_pretty(&metadata).unwrap(),
-    ).unwrap();
+    )
+    .unwrap();
     std::fs::write(metadata_dir.join("version-hint.text"), "1").unwrap();
 }
 
@@ -231,7 +240,8 @@ pub fn create_snapshot_bloat_table(root: &Path) {
     std::fs::write(
         metadata_dir.join("v1.metadata.json"),
         serde_json::to_string_pretty(&metadata).unwrap(),
-    ).unwrap();
+    )
+    .unwrap();
     std::fs::write(metadata_dir.join("version-hint.text"), "1").unwrap();
 }
 
@@ -303,7 +313,8 @@ pub fn create_orphan_files_table(root: &Path) {
     std::fs::write(
         metadata_dir.join("v1.metadata.json"),
         serde_json::to_string_pretty(&metadata).unwrap(),
-    ).unwrap();
+    )
+    .unwrap();
     std::fs::write(metadata_dir.join("version-hint.text"), "1").unwrap();
 }
 
@@ -381,7 +392,8 @@ pub fn create_schema_drift_table(root: &Path) {
     std::fs::write(
         metadata_dir.join("v1.metadata.json"),
         serde_json::to_string_pretty(&metadata).unwrap(),
-    ).unwrap();
+    )
+    .unwrap();
     std::fs::write(metadata_dir.join("version-hint.text"), "1").unwrap();
 }
 
@@ -390,8 +402,8 @@ pub fn create_schema_drift_table(root: &Path) {
 /// Write a manifest file (Avro) with data file entries.
 fn write_manifest_file(
     path: &Path,
-    data_files: &[(String, i64, i64)],    // (path, size_bytes, record_count)
-    delete_files: &[(String, i64, i64)],  // (path, size_bytes, record_count)
+    data_files: &[(String, i64, i64)], // (path, size_bytes, record_count)
+    delete_files: &[(String, i64, i64)], // (path, size_bytes, record_count)
 ) {
     let schema_str = r#"{
         "type": "record",
@@ -425,7 +437,11 @@ fn write_manifest_file(
 
         // Build data_file sub-record.
         if let AvroSchema::Record(rec_schema) = &schema {
-            let df_field = rec_schema.fields.iter().find(|f| f.name == "data_file").unwrap();
+            let df_field = rec_schema
+                .fields
+                .iter()
+                .find(|f| f.name == "data_file")
+                .unwrap();
             if let AvroSchema::Record(_) = &df_field.schema {
                 let mut df_record = Record::new(&df_field.schema).unwrap();
                 df_record.put("content", AvroValue::Int(0)); // data
@@ -448,7 +464,11 @@ fn write_manifest_file(
         record.put("snapshot_id", union_val);
 
         if let AvroSchema::Record(rec_schema) = &schema {
-            let df_field = rec_schema.fields.iter().find(|f| f.name == "data_file").unwrap();
+            let df_field = rec_schema
+                .fields
+                .iter()
+                .find(|f| f.name == "data_file")
+                .unwrap();
             if let AvroSchema::Record(_) = &df_field.schema {
                 let mut df_record = Record::new(&df_field.schema).unwrap();
                 df_record.put("content", AvroValue::Int(1)); // position delete

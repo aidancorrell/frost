@@ -90,9 +90,8 @@ impl CatalogProvider for GlueCatalog {
                 ))
             })?;
 
-            let mut table_meta =
-                metadata_json::parse_metadata_json(&metadata_json_str, &table_id)
-                    .map_err(|e| CatalogError::Parse(e.to_string()))?;
+            let mut table_meta = metadata_json::parse_metadata_json(&metadata_json_str, &table_id)
+                .map_err(|e| CatalogError::Parse(e.to_string()))?;
 
             // Parse manifest list from the current snapshot.
             let current_snap = table_meta
@@ -104,17 +103,18 @@ impl CatalogProvider for GlueCatalog {
             if let Some(snapshot) = current_snap {
                 if !snapshot.manifest_list.is_empty() {
                     // Download manifest list.
-                    let ml_bytes = download_s3_bytes(&snapshot.manifest_list)
-                        .await
-                        .map_err(|e| {
-                            CatalogError::Io(std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                format!(
-                                    "Failed to download manifest list {}: {}",
-                                    snapshot.manifest_list, e
-                                ),
-                            ))
-                        })?;
+                    let ml_bytes =
+                        download_s3_bytes(&snapshot.manifest_list)
+                            .await
+                            .map_err(|e| {
+                                CatalogError::Io(std::io::Error::new(
+                                    std::io::ErrorKind::Other,
+                                    format!(
+                                        "Failed to download manifest list {}: {}",
+                                        snapshot.manifest_list, e
+                                    ),
+                                ))
+                            })?;
 
                     // Write to temp file for Avro parsing.
                     let tmp_dir = tempfile::TempDir::new().map_err(CatalogError::Io)?;
@@ -123,9 +123,7 @@ impl CatalogProvider for GlueCatalog {
 
                     if let Ok(entries) = manifest::parse_manifest_list(&ml_path) {
                         for entry in &entries {
-                            if let Ok(m_bytes) =
-                                download_s3_bytes(&entry.manifest_path).await
-                            {
+                            if let Ok(m_bytes) = download_s3_bytes(&entry.manifest_path).await {
                                 let m_path = tmp_dir.path().join(
                                     PathBuf::from(&entry.manifest_path)
                                         .file_name()
@@ -263,7 +261,9 @@ impl CatalogProvider for GlueCatalog {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "glue")]
-async fn download_s3_file(s3_uri: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+async fn download_s3_file(
+    s3_uri: &str,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let bytes = download_s3_bytes(s3_uri).await?;
     Ok(String::from_utf8(bytes)?)
 }

@@ -357,7 +357,11 @@ pub fn create_schema_drift_table(root: &Path) {
 
 // --- Avro writers ---
 
-fn write_manifest_file(path: &Path, data_files: &[(String, i64, i64)], delete_files: &[(String, i64, i64)]) {
+fn write_manifest_file(
+    path: &Path,
+    data_files: &[(String, i64, i64)],
+    delete_files: &[(String, i64, i64)],
+) {
     let schema_str = r#"{
         "type": "record",
         "name": "manifest_entry",
@@ -381,26 +385,31 @@ fn write_manifest_file(path: &Path, data_files: &[(String, i64, i64)], delete_fi
     let schema = AvroSchema::parse_str(schema_str).unwrap();
     let mut writer = Writer::new(&schema, Vec::new());
 
-    let write_entry = |writer: &mut Writer<Vec<u8>>, file_path: &str, size: i64, records: i64, content: i32| {
-        let mut record = Record::new(&schema).unwrap();
-        record.put("status", AvroValue::Int(1));
-        record.put(
-            "snapshot_id",
-            AvroValue::Union(1, Box::new(AvroValue::Long(1))),
-        );
+    let write_entry =
+        |writer: &mut Writer<Vec<u8>>, file_path: &str, size: i64, records: i64, content: i32| {
+            let mut record = Record::new(&schema).unwrap();
+            record.put("status", AvroValue::Int(1));
+            record.put(
+                "snapshot_id",
+                AvroValue::Union(1, Box::new(AvroValue::Long(1))),
+            );
 
-        if let AvroSchema::Record(rec_schema) = &schema {
-            let df_field = rec_schema.fields.iter().find(|f| f.name == "data_file").unwrap();
-            let mut df_record = Record::new(&df_field.schema).unwrap();
-            df_record.put("content", AvroValue::Int(content));
-            df_record.put("file_path", AvroValue::String(file_path.to_string()));
-            df_record.put("file_format", AvroValue::String("PARQUET".to_string()));
-            df_record.put("record_count", AvroValue::Long(records));
-            df_record.put("file_size_in_bytes", AvroValue::Long(size));
-            record.put("data_file", df_record);
-        }
-        writer.append(record).unwrap();
-    };
+            if let AvroSchema::Record(rec_schema) = &schema {
+                let df_field = rec_schema
+                    .fields
+                    .iter()
+                    .find(|f| f.name == "data_file")
+                    .unwrap();
+                let mut df_record = Record::new(&df_field.schema).unwrap();
+                df_record.put("content", AvroValue::Int(content));
+                df_record.put("file_path", AvroValue::String(file_path.to_string()));
+                df_record.put("file_format", AvroValue::String("PARQUET".to_string()));
+                df_record.put("record_count", AvroValue::Long(records));
+                df_record.put("file_size_in_bytes", AvroValue::Long(size));
+                record.put("data_file", df_record);
+            }
+            writer.append(record).unwrap();
+        };
 
     for (path, size, records) in data_files {
         write_entry(&mut writer, path, *size, *records, 0);

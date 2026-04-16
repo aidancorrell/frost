@@ -8,7 +8,7 @@ use crate::config::FrostConfig;
 use crate::engine;
 use crate::report::{HealthReport, Severity};
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -101,10 +101,10 @@ impl WatchDb {
     /// Open (or create) the SQLite database at the given path.
     pub fn open(path: &str) -> Result<Self, WatchError> {
         // Create parent directories if needed.
-        if let Some(parent) = Path::new(path).parent() {
-            if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent).map_err(WatchError::Io)?;
-            }
+        if let Some(parent) = Path::new(path).parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent).map_err(WatchError::Io)?;
         }
 
         let conn = Connection::open(path).map_err(WatchError::Sqlite)?;
@@ -235,9 +235,11 @@ impl WatchDb {
                     critical_count: row.get(3)?,
                     warning_count: row.get(4)?,
                     report_json: row.get(5)?,
-                    checked_at: row
-                        .get::<_, String>(6)
-                        .map(|s| DateTime::parse_from_rfc3339(&s).unwrap().with_timezone(&Utc))?,
+                    checked_at: row.get::<_, String>(6).map(|s| {
+                        DateTime::parse_from_rfc3339(&s)
+                            .unwrap()
+                            .with_timezone(&Utc)
+                    })?,
                 })
             })
             .optional()
@@ -270,9 +272,11 @@ impl WatchDb {
                     critical_count: row.get(3)?,
                     warning_count: row.get(4)?,
                     report_json: row.get(5)?,
-                    checked_at: row
-                        .get::<_, String>(6)
-                        .map(|s| DateTime::parse_from_rfc3339(&s).unwrap().with_timezone(&Utc))?,
+                    checked_at: row.get::<_, String>(6).map(|s| {
+                        DateTime::parse_from_rfc3339(&s)
+                            .unwrap()
+                            .with_timezone(&Utc)
+                    })?,
                 })
             })
             .map_err(WatchError::Sqlite)?;
@@ -346,9 +350,11 @@ impl WatchDb {
                     critical_count: row.get(3)?,
                     warning_count: row.get(4)?,
                     report_json: row.get(5)?,
-                    checked_at: row
-                        .get::<_, String>(6)
-                        .map(|s| DateTime::parse_from_rfc3339(&s).unwrap().with_timezone(&Utc))?,
+                    checked_at: row.get::<_, String>(6).map(|s| {
+                        DateTime::parse_from_rfc3339(&s)
+                            .unwrap()
+                            .with_timezone(&Utc)
+                    })?,
                 })
             })
             .map_err(WatchError::Sqlite)?;
@@ -373,9 +379,11 @@ fn map_alert_row(row: &rusqlite::Row) -> rusqlite::Result<WatchAlert> {
         resolved_findings: row
             .get::<_, String>(5)
             .map(|s| serde_json::from_str(&s).unwrap_or_default())?,
-        alerted_at: row
-            .get::<_, String>(6)
-            .map(|s| DateTime::parse_from_rfc3339(&s).unwrap().with_timezone(&Utc))?,
+        alerted_at: row.get::<_, String>(6).map(|s| {
+            DateTime::parse_from_rfc3339(&s)
+                .unwrap()
+                .with_timezone(&Utc)
+        })?,
     })
 }
 
@@ -423,10 +431,10 @@ pub async fn run_watch_cycle(
             db.store_alert(&alert)?;
 
             // Fire webhook if configured.
-            if let Some(ref url) = config.watch.webhook_url {
-                if let Err(e) = send_webhook(url, &alert).await {
-                    tracing::error!("Watch: webhook failed for '{}': {}", table_id, e);
-                }
+            if let Some(ref url) = config.watch.webhook_url
+                && let Err(e) = send_webhook(url, &alert).await
+            {
+                tracing::error!("Watch: webhook failed for '{}': {}", table_id, e);
             }
 
             alerts.push(alert);
@@ -520,16 +528,17 @@ fn detect_changes(current: &HealthReport, previous: Option<&StoredReport>) -> Op
         }
         Some(prev) => {
             // Parse previous report to get finding IDs.
-            let prev_finding_ids: Vec<String> = serde_json::from_str::<HealthReport>(&prev.report_json)
-                .ok()
-                .map(|r| {
-                    r.findings
-                        .iter()
-                        .filter(|f| f.severity != Severity::Pass)
-                        .map(|f| f.check_id.clone())
-                        .collect()
-                })
-                .unwrap_or_default();
+            let prev_finding_ids: Vec<String> =
+                serde_json::from_str::<HealthReport>(&prev.report_json)
+                    .ok()
+                    .map(|r| {
+                        r.findings
+                            .iter()
+                            .filter(|f| f.severity != Severity::Pass)
+                            .map(|f| f.check_id.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default();
 
             let new_findings: Vec<String> = current_finding_ids
                 .iter()
@@ -544,7 +553,10 @@ fn detect_changes(current: &HealthReport, previous: Option<&StoredReport>) -> Op
                 .collect();
 
             // Alert if severity changed or findings changed.
-            if new_findings.is_empty() && resolved_findings.is_empty() && prev.severity == current_severity {
+            if new_findings.is_empty()
+                && resolved_findings.is_empty()
+                && prev.severity == current_severity
+            {
                 return None;
             }
 

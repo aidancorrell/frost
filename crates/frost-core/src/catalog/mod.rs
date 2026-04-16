@@ -5,6 +5,7 @@
 //! or test fixtures.
 
 pub mod glue;
+pub mod rest;
 
 use crate::config::CatalogConfig;
 use crate::metadata::TableMetadata;
@@ -380,11 +381,13 @@ fn extract_version(path: &Path) -> i64 {
 /// Build a catalog provider from config.
 pub fn from_config(config: &CatalogConfig) -> Result<Box<dyn CatalogProvider>, CatalogError> {
     match config {
-        CatalogConfig::Filesystem { warehouse } => {
-            Ok(Box::new(FilesystemCatalog::new(warehouse)))
-        }
-        CatalogConfig::Rest { uri, .. } => Err(CatalogError::NotImplemented(format!(
-            "REST catalog at '{uri}'"
+        CatalogConfig::Filesystem { warehouse } => Ok(Box::new(FilesystemCatalog::new(warehouse))),
+        CatalogConfig::Rest {
+            uri, prefix, token, ..
+        } => Ok(Box::new(rest::RestCatalog::new(
+            uri.clone(),
+            prefix.clone(),
+            token.clone(),
         ))),
         CatalogConfig::Glue {
             region, warehouse, ..

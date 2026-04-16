@@ -5,8 +5,8 @@
 //! to build the complete picture of a table's data and delete files.
 
 use crate::metadata::{DataFile, DeleteFile, DeleteType, FileFormat};
-use apache_avro::types::Value as AvroValue;
 use apache_avro::Reader;
+use apache_avro::types::Value as AvroValue;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -64,7 +64,9 @@ pub fn parse_manifest_list(path: &Path) -> Result<Vec<ManifestListEntry>, Manife
 }
 
 /// Parse manifest list entries from raw Avro bytes.
-pub fn parse_manifest_list_bytes(bytes: &[u8]) -> Result<Vec<ManifestListEntry>, ManifestParseError> {
+pub fn parse_manifest_list_bytes(
+    bytes: &[u8],
+) -> Result<Vec<ManifestListEntry>, ManifestParseError> {
     let reader = Reader::new(bytes).map_err(ManifestParseError::Avro)?;
 
     let mut entries = Vec::new();
@@ -234,7 +236,7 @@ fn parse_manifest_record(
         _ => {
             return Err(ManifestParseError::MissingField(
                 "data_file (not a record)".to_string(),
-            ))
+            ));
         }
     };
 
@@ -284,7 +286,7 @@ fn parse_data_file_record(
 
 // --- Helper functions for extracting values from Avro records ---
 
-fn avro_field_map<'a>(fields: &'a [(String, AvroValue)]) -> HashMap<&'a str, &'a AvroValue> {
+fn avro_field_map(fields: &[(String, AvroValue)]) -> HashMap<&str, &AvroValue> {
     fields.iter().map(|(k, v)| (k.as_str(), v)).collect()
 }
 

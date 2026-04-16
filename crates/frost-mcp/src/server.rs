@@ -37,7 +37,7 @@ impl FrostServer {
         let metadata = match self.load_table(&params.table).await {
             Ok(m) => m,
             Err(e) => {
-                return serde_json::to_string_pretty(&serde_json::json!({"error": e})).unwrap()
+                return serde_json::to_string_pretty(&serde_json::json!({"error": e})).unwrap();
             }
         };
 
@@ -136,7 +136,7 @@ impl FrostServer {
         let metadata = match self.load_table(&params.table).await {
             Ok(m) => m,
             Err(e) => {
-                return serde_json::to_string_pretty(&serde_json::json!({"error": e})).unwrap()
+                return serde_json::to_string_pretty(&serde_json::json!({"error": e})).unwrap();
             }
         };
 
@@ -158,7 +158,7 @@ impl FrostServer {
         let metadata = match self.load_table(&params.table).await {
             Ok(m) => m,
             Err(e) => {
-                return serde_json::to_string_pretty(&serde_json::json!({"error": e})).unwrap()
+                return serde_json::to_string_pretty(&serde_json::json!({"error": e})).unwrap();
             }
         };
 
@@ -254,43 +254,32 @@ impl FrostServer {
 
 #[tool_router(server_handler)]
 impl FrostServer {
-    #[tool(description = "Run health checks on an Iceberg table. Returns findings with severity, impact, and fix commands.")]
-    async fn check_table(
-        &self,
-        Parameters(params): Parameters<CheckTableParams>,
-    ) -> String {
+    #[tool(
+        description = "Run health checks on an Iceberg table. Returns findings with severity, impact, and fix commands."
+    )]
+    async fn check_table(&self, Parameters(params): Parameters<CheckTableParams>) -> String {
         self.run_check_table(params).await
     }
 
     #[tool(description = "Summarize health across all tables in a catalog, sorted by severity.")]
-    async fn check_catalog(
-        &self,
-        Parameters(params): Parameters<CheckCatalogParams>,
-    ) -> String {
+    async fn check_catalog(&self, Parameters(params): Parameters<CheckCatalogParams>) -> String {
         self.run_check_catalog(params).await
     }
 
-    #[tool(description = "Generate a Spark SQL fix command for a specific health finding on a table.")]
-    async fn get_fix(
-        &self,
-        Parameters(params): Parameters<GetFixParams>,
-    ) -> String {
+    #[tool(
+        description = "Generate a Spark SQL fix command for a specific health finding on a table."
+    )]
+    async fn get_fix(&self, Parameters(params): Parameters<GetFixParams>) -> String {
         self.run_get_fix(params).await
     }
 
     #[tool(description = "Estimate monthly cost waste from health issues on an Iceberg table.")]
-    async fn get_cost_report(
-        &self,
-        Parameters(params): Parameters<GetCostReportParams>,
-    ) -> String {
+    async fn get_cost_report(&self, Parameters(params): Parameters<GetCostReportParams>) -> String {
         self.run_get_cost_report(params).await
     }
 
     #[tool(description = "Query watch mode state for recent alerts and health trends.")]
-    async fn watch_status(
-        &self,
-        Parameters(params): Parameters<WatchStatusParams>,
-    ) -> String {
+    async fn watch_status(&self, Parameters(params): Parameters<WatchStatusParams>) -> String {
         self.run_watch_status(params).await
     }
 }

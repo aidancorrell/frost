@@ -262,7 +262,11 @@ async fn main() {
             let watch_db = match frost_core::watch::WatchDb::open(&db) {
                 Ok(db) => db,
                 Err(e) => {
-                    eprintln!("{} Failed to open watch database: {}", "error:".red().bold(), e);
+                    eprintln!(
+                        "{} Failed to open watch database: {}",
+                        "error:".red().bold(),
+                        e
+                    );
                     std::process::exit(1);
                 }
             };
@@ -278,7 +282,9 @@ async fn main() {
                     } else {
                         watch_db.get_all_latest().unwrap_or_default()
                     };
-                    let alerts = watch_db.get_alerts(table.as_deref(), 10).unwrap_or_default();
+                    let alerts = watch_db
+                        .get_alerts(table.as_deref(), 10)
+                        .unwrap_or_default();
 
                     let output = serde_json::json!({
                         "tables": latest,
@@ -298,7 +304,10 @@ async fn main() {
                     };
 
                     if latest.is_empty() {
-                        println!("No watch data found. Run {} to start monitoring.", "frost watch".bold());
+                        println!(
+                            "No watch data found. Run {} to start monitoring.",
+                            "frost watch".bold()
+                        );
                     } else {
                         println!("{}", "Watch Status".bold().underline());
                         println!();
@@ -360,11 +369,7 @@ async fn main() {
                     if tables.is_empty() {
                         println!("No tables found.");
                     } else {
-                        println!(
-                            "{} ({} tables)",
-                            "Tables".bold().underline(),
-                            tables.len()
-                        );
+                        println!("{} ({} tables)", "Tables".bold().underline(), tables.len());
                         for table in &tables {
                             println!("  {}", table);
                         }
@@ -474,31 +479,101 @@ fn generate_demo_metadata(table_identifier: &str) -> TableMetadata {
         current_schema: Schema {
             schema_id: 1,
             fields: vec![
-                Field { id: 1, name: "id".to_string(), field_type: "long".to_string(), required: true },
-                Field { id: 2, name: "user_id".to_string(), field_type: "long".to_string(), required: true },
-                Field { id: 3, name: "event_type".to_string(), field_type: "string".to_string(), required: true },
-                Field { id: 4, name: "payload".to_string(), field_type: "string".to_string(), required: false },
-                Field { id: 5, name: "created_at".to_string(), field_type: "timestamp".to_string(), required: true },
+                Field {
+                    id: 1,
+                    name: "id".to_string(),
+                    field_type: "long".to_string(),
+                    required: true,
+                },
+                Field {
+                    id: 2,
+                    name: "user_id".to_string(),
+                    field_type: "long".to_string(),
+                    required: true,
+                },
+                Field {
+                    id: 3,
+                    name: "event_type".to_string(),
+                    field_type: "string".to_string(),
+                    required: true,
+                },
+                Field {
+                    id: 4,
+                    name: "payload".to_string(),
+                    field_type: "string".to_string(),
+                    required: false,
+                },
+                Field {
+                    id: 5,
+                    name: "created_at".to_string(),
+                    field_type: "timestamp".to_string(),
+                    required: true,
+                },
             ],
         },
         schemas: vec![
             Schema {
                 schema_id: 0,
                 fields: vec![
-                    Field { id: 1, name: "id".to_string(), field_type: "long".to_string(), required: true },
-                    Field { id: 2, name: "user_id".to_string(), field_type: "long".to_string(), required: true },
-                    Field { id: 3, name: "event_type".to_string(), field_type: "string".to_string(), required: true },
-                    Field { id: 4, name: "created_at".to_string(), field_type: "timestamp".to_string(), required: true },
+                    Field {
+                        id: 1,
+                        name: "id".to_string(),
+                        field_type: "long".to_string(),
+                        required: true,
+                    },
+                    Field {
+                        id: 2,
+                        name: "user_id".to_string(),
+                        field_type: "long".to_string(),
+                        required: true,
+                    },
+                    Field {
+                        id: 3,
+                        name: "event_type".to_string(),
+                        field_type: "string".to_string(),
+                        required: true,
+                    },
+                    Field {
+                        id: 4,
+                        name: "created_at".to_string(),
+                        field_type: "timestamp".to_string(),
+                        required: true,
+                    },
                 ],
             },
             Schema {
                 schema_id: 1,
                 fields: vec![
-                    Field { id: 1, name: "id".to_string(), field_type: "long".to_string(), required: true },
-                    Field { id: 2, name: "user_id".to_string(), field_type: "long".to_string(), required: true },
-                    Field { id: 3, name: "event_type".to_string(), field_type: "string".to_string(), required: true },
-                    Field { id: 4, name: "payload".to_string(), field_type: "string".to_string(), required: false },
-                    Field { id: 5, name: "created_at".to_string(), field_type: "timestamp".to_string(), required: true },
+                    Field {
+                        id: 1,
+                        name: "id".to_string(),
+                        field_type: "long".to_string(),
+                        required: true,
+                    },
+                    Field {
+                        id: 2,
+                        name: "user_id".to_string(),
+                        field_type: "long".to_string(),
+                        required: true,
+                    },
+                    Field {
+                        id: 3,
+                        name: "event_type".to_string(),
+                        field_type: "string".to_string(),
+                        required: true,
+                    },
+                    Field {
+                        id: 4,
+                        name: "payload".to_string(),
+                        field_type: "string".to_string(),
+                        required: false,
+                    },
+                    Field {
+                        id: 5,
+                        name: "created_at".to_string(),
+                        field_type: "timestamp".to_string(),
+                        required: true,
+                    },
                 ],
             },
         ],
@@ -688,7 +763,7 @@ fn render_cost_report(report: &cost::CostReport) {
     println!();
 
     if report.items.is_empty() {
-        println!("  {} No cost waste detected", "✅");
+        println!("  ✅ No cost waste detected");
     } else {
         let mut table = Table::new();
         table.set_header(vec![

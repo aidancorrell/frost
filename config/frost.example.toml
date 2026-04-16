@@ -6,6 +6,8 @@
 type = "rest"
 uri = "http://localhost:8181"
 warehouse = "s3://my-bucket/warehouse"
+# token = "my-bearer-token"       # Optional: Bearer token for authentication
+# prefix = "my_catalog"           # Optional: REST catalog prefix
 
 # Alternatively, use AWS Glue:
 # [catalog]
