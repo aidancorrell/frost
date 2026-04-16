@@ -1,0 +1,12 @@
+target/
+.git/
+.gitignore
+.env
+.env.local
+*.md
+sandbox/
+tests/
+frost-watch.db
+frost-watch.db-journal
+.idea/
+.vscode/

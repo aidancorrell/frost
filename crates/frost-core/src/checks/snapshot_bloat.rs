@@ -74,7 +74,8 @@ impl HealthCheck for SnapshotBloatCheck {
 
         // Estimate metadata bloat: rough heuristic of ~4KB per snapshot for the
         // metadata JSON entry, plus manifest list references.
-        let estimated_metadata_waste_bytes = snapshot_count.saturating_sub(thresholds.max_snapshots) * 4096;
+        let estimated_metadata_waste_bytes =
+            snapshot_count.saturating_sub(thresholds.max_snapshots) * 4096;
         let estimated_metadata_waste_gb =
             estimated_metadata_waste_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
 

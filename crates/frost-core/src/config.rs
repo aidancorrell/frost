@@ -1,13 +1,15 @@
+use crate::watch::WatchConfig;
 use serde::{Deserialize, Serialize};
 
 /// Top-level frost configuration, typically loaded from frost.toml.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct FrostConfig {
     pub catalog: CatalogConfig,
     pub thresholds: Thresholds,
     pub cost: CostConfig,
     pub output: OutputConfig,
+    pub watch: WatchConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,6 +18,10 @@ pub enum CatalogConfig {
     Rest {
         uri: String,
         warehouse: String,
+        #[serde(default)]
+        token: Option<String>,
+        #[serde(default)]
+        prefix: Option<String>,
     },
     Glue {
         region: Option<String>,
@@ -74,17 +80,6 @@ pub enum OutputFormat {
 }
 
 // --- Defaults ---
-
-impl Default for FrostConfig {
-    fn default() -> Self {
-        Self {
-            catalog: CatalogConfig::default(),
-            thresholds: Thresholds::default(),
-            cost: CostConfig::default(),
-            output: OutputConfig::default(),
-        }
-    }
-}
 
 impl Default for CatalogConfig {
     fn default() -> Self {

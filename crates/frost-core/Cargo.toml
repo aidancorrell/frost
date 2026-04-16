@@ -14,3 +14,16 @@ tracing = { workspace = true }
 chrono = { workspace = true }
 toml = "0.8"
 bytesize = { version = "2", features = ["serde"] }
+apache-avro = "0.21"
+glob = "0.3"
+rusqlite = { version = "0.35", features = ["bundled"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+aws-config = { version = "1", optional = true }
+aws-sdk-glue = { version = "1", optional = true }
+
+[features]
+default = []
+glue = ["aws-config", "aws-sdk-glue"]
+
+[dev-dependencies]
+tempfile = "3"

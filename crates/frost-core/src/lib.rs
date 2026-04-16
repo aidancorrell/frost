@@ -11,7 +11,9 @@ pub mod cost;
 pub mod engine;
 pub mod fix;
 pub mod metadata;
+pub mod parse;
 pub mod report;
+pub mod watch;
 
 #[cfg(test)]
 pub mod test_helpers;

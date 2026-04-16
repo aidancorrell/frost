@@ -43,7 +43,11 @@ impl HealthCheck for DeletePressureCheck {
             .filter(|f| f.delete_type == crate::metadata::DeleteType::EqualityDelete)
             .count();
 
-        let total_delete_bytes: u64 = metadata.delete_files.iter().map(|f| f.file_size_bytes).sum();
+        let total_delete_bytes: u64 = metadata
+            .delete_files
+            .iter()
+            .map(|f| f.file_size_bytes)
+            .sum();
 
         let severity = if delete_count > thresholds.max_delete_files * 5 {
             Severity::Critical
