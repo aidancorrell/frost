@@ -84,10 +84,10 @@ impl CatalogProvider for GlueCatalog {
 
             // Download and parse the metadata JSON from S3.
             let metadata_json_str = download_s3_file(metadata_location).await.map_err(|e| {
-                CatalogError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to download {}: {}", metadata_location, e),
-                ))
+                CatalogError::Io(std::io::Error::other(format!(
+                    "Failed to download {}: {}",
+                    metadata_location, e
+                )))
             })?;
 
             let mut table_meta = metadata_json::parse_metadata_json(&metadata_json_str, &table_id)
@@ -100,41 +100,37 @@ impl CatalogProvider for GlueCatalog {
                 .find(|s| Some(s.snapshot_id) == table_meta.current_snapshot_id)
                 .or_else(|| table_meta.snapshots.last());
 
-            if let Some(snapshot) = current_snap {
-                if !snapshot.manifest_list.is_empty() {
-                    // Download manifest list.
-                    let ml_bytes =
-                        download_s3_bytes(&snapshot.manifest_list)
-                            .await
-                            .map_err(|e| {
-                                CatalogError::Io(std::io::Error::new(
-                                    std::io::ErrorKind::Other,
-                                    format!(
-                                        "Failed to download manifest list {}: {}",
-                                        snapshot.manifest_list, e
-                                    ),
-                                ))
-                            })?;
+            if let Some(snapshot) = current_snap
+                && !snapshot.manifest_list.is_empty()
+            {
+                // Download manifest list.
+                let ml_bytes = download_s3_bytes(&snapshot.manifest_list)
+                    .await
+                    .map_err(|e| {
+                        CatalogError::Io(std::io::Error::other(format!(
+                            "Failed to download manifest list {}: {}",
+                            snapshot.manifest_list, e
+                        )))
+                    })?;
 
-                    // Write to temp file for Avro parsing.
-                    let tmp_dir = tempfile::TempDir::new().map_err(CatalogError::Io)?;
-                    let ml_path = tmp_dir.path().join("manifest-list.avro");
-                    std::fs::write(&ml_path, &ml_bytes).map_err(CatalogError::Io)?;
+                // Write to temp file for Avro parsing.
+                let tmp_dir = tempfile::TempDir::new().map_err(CatalogError::Io)?;
+                let ml_path = tmp_dir.path().join("manifest-list.avro");
+                std::fs::write(&ml_path, &ml_bytes).map_err(CatalogError::Io)?;
 
-                    if let Ok(entries) = manifest::parse_manifest_list(&ml_path) {
-                        for entry in &entries {
-                            if let Ok(m_bytes) = download_s3_bytes(&entry.manifest_path).await {
-                                let m_path = tmp_dir.path().join(
-                                    PathBuf::from(&entry.manifest_path)
-                                        .file_name()
-                                        .unwrap_or_default(),
-                                );
-                                if std::fs::write(&m_path, &m_bytes).is_ok() {
-                                    if let Ok((data, deletes)) = manifest::parse_manifest(&m_path) {
-                                        table_meta.data_files.extend(data);
-                                        table_meta.delete_files.extend(deletes);
-                                    }
-                                }
+                if let Ok(entries) = manifest::parse_manifest_list(&ml_path) {
+                    for entry in &entries {
+                        if let Ok(m_bytes) = download_s3_bytes(&entry.manifest_path).await {
+                            let m_path = tmp_dir.path().join(
+                                PathBuf::from(&entry.manifest_path)
+                                    .file_name()
+                                    .unwrap_or_default(),
+                            );
+                            if std::fs::write(&m_path, &m_bytes).is_ok()
+                                && let Ok((data, deletes)) = manifest::parse_manifest(&m_path)
+                            {
+                                table_meta.data_files.extend(data);
+                                table_meta.delete_files.extend(deletes);
                             }
                         }
                     }
@@ -257,7 +253,9 @@ impl CatalogProvider for GlueCatalog {
 }
 
 // ---------------------------------------------------------------------------
-// S3 helpers (only compiled with glue feature)
+// S3 helpers (only compiled with glue feature). These delegate to the shared
+// object-store abstraction which signs requests using the standard AWS
+// credential chain — works on private buckets.
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "glue")]
@@ -272,23 +270,5 @@ async fn download_s3_file(
 async fn download_s3_bytes(
     s3_uri: &str,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
-    // Parse s3://bucket/key
-    let stripped = s3_uri
-        .strip_prefix("s3://")
-        .ok_or_else(|| format!("Not an S3 URI: {}", s3_uri))?;
-    let (bucket, key) = stripped
-        .split_once('/')
-        .ok_or_else(|| format!("Invalid S3 URI: {}", s3_uri))?;
-
-    let config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
-    let s3_client = aws_sdk_glue::Client::new(&config);
-
-    // Use reqwest to download from S3 via presigned URL or direct SDK.
-    // For simplicity, use the S3 SDK directly.
-    // Note: In production, you'd use aws_sdk_s3, but we're keeping deps minimal.
-    // Fall back to reqwest for S3 file access.
-    let url = format!("https://{}.s3.amazonaws.com/{}", bucket, key);
-    let response = reqwest::get(&url).await?;
-    let bytes = response.bytes().await?;
-    Ok(bytes.to_vec())
+    Ok(crate::object_store::fetch_bytes(s3_uri).await?)
 }

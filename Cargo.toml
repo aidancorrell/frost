@@ -3,10 +3,11 @@ resolver = "2"
 members = ["crates/frost-core", "crates/frost-cli", "crates/frost-mcp"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/aidancorrell/frost"
+homepage = "https://github.com/aidancorrell/frost"
 
 [workspace.dependencies]
 frost-core = { path = "crates/frost-core" }
@@ -17,3 +18,9 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 chrono = { version = "0.4", features = ["serde"] }
+
+[profile.release-lto]
+inherits = "release"
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
