@@ -1,0 +1,41 @@
+name: Feature request
+description: Propose a new check, catalog backend, or capability
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check `ROADMAP.md` first — your idea may already be scoped
+        to an upcoming phase.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - New health check
+        - New catalog backend
+        - New fix dialect (Trino, Flink, etc.)
+        - MCP surface (tools, resources, prompts)
+        - CLI ergonomics
+        - Watch mode / alerting
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user / agent problem does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

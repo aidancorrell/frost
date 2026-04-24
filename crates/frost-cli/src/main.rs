@@ -101,6 +101,16 @@ enum Commands {
         #[arg(long, short, value_enum, default_value = "pretty")]
         format: Format,
     },
+    /// Show a sample report against synthetic data (for trying out frost).
+    Demo {
+        /// Table identifier to display in the report.
+        #[arg(default_value = "demo.events")]
+        table: String,
+
+        /// Output format.
+        #[arg(long, short, value_enum, default_value = "pretty")]
+        format: Format,
+    },
 }
 
 #[derive(Clone, ValueEnum)]
@@ -344,6 +354,11 @@ async fn main() {
                 }
             }
         }
+        Commands::Demo { table, format } => {
+            let metadata = generate_demo_metadata(&table);
+            let report = engine::check_table(&metadata, &config);
+            render_report(&report, format.into());
+        }
         Commands::List { namespace, format } => {
             let provider = match catalog::from_config(&config.catalog) {
                 Ok(p) => p,
@@ -380,35 +395,51 @@ async fn main() {
     }
 }
 
-/// Load table metadata — tries the configured catalog first, falls back to demo data.
+/// Load table metadata from the configured catalog, exiting with a clear
+/// error if it fails. No silent fallback — agents and CI gates must get
+/// real findings or a real error, never synthetic data.
 async fn load_metadata(table_identifier: &str, config: &FrostConfig) -> TableMetadata {
-    // Try loading from configured catalog.
-    match catalog::from_config(&config.catalog) {
-        Ok(provider) => match provider.load_table(table_identifier).await {
-            Ok(meta) => {
-                tracing::info!(
-                    "Loaded '{}' from catalog ({} data files, {} snapshots)",
-                    table_identifier,
-                    meta.data_files.len(),
-                    meta.snapshots.len(),
-                );
-                return meta;
-            }
-            Err(e) => {
-                tracing::debug!("Catalog load failed: {}, falling back to demo data", e);
-            }
-        },
+    let provider = match catalog::from_config(&config.catalog) {
+        Ok(p) => p,
         Err(e) => {
-            tracing::debug!("Catalog not configured: {}, using demo data", e);
+            eprintln!(
+                "{} failed to initialize catalog: {}\n  hint: set [catalog] in frost.toml or pass --warehouse",
+                "error:".red().bold(),
+                e
+            );
+            eprintln!(
+                "  to try frost against synthetic data, run: {} ",
+                "frost demo".bold()
+            );
+            std::process::exit(2);
+        }
+    };
+
+    match provider.load_table(table_identifier).await {
+        Ok(meta) => {
+            tracing::info!(
+                "Loaded '{}' from catalog ({} data files, {} snapshots)",
+                table_identifier,
+                meta.data_files.len(),
+                meta.snapshots.len(),
+            );
+            meta
+        }
+        Err(e) => {
+            eprintln!(
+                "{} failed to load table '{}': {}",
+                "error:".red().bold(),
+                table_identifier,
+                e
+            );
+            eprintln!(
+                "  to try frost against synthetic data, run: {} {}",
+                "frost demo".bold(),
+                table_identifier
+            );
+            std::process::exit(2);
         }
     }
-
-    // Fall back to demo data.
-    tracing::info!(
-        "Using demo data for '{}' (configure --warehouse or frost.toml for real tables)",
-        table_identifier
-    );
-    generate_demo_metadata(table_identifier)
 }
 
 /// Generate a demo table with realistic pathologies for demonstration.

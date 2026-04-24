@@ -1,0 +1,115 @@
+name: E2E (sandbox)
+
+# End-to-end smoke test against the sandbox/ docker-compose stack:
+# Spark-Iceberg + Iceberg REST catalog + MinIO. Verifies frost can talk to
+# a real REST catalog and fetch manifests through S3 (MinIO). Heavy — runs
+# on nightly schedule and on-demand, not on every PR.
+
+on:
+  schedule:
+    - cron: "0 9 * * *"  # 09:00 UTC daily
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "crates/frost-core/src/catalog/rest.rs"
+      - "crates/frost-core/src/object_store.rs"
+      - "sandbox/**"
+      - ".github/workflows/e2e.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rest-catalog-e2e:
+    name: REST catalog + MinIO
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build frost
+        run: cargo build --release -p frost-cli
+
+      - name: Start sandbox stack
+        working-directory: sandbox
+        run: docker compose up -d minio minio-init rest-catalog spark-iceberg
+
+      - name: Wait for services
+        run: |
+          echo "Waiting for REST catalog..."
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8181/v1/config > /dev/null; then
+              echo "REST catalog is up."
+              break
+            fi
+            sleep 2
+          done
+          curl -sf http://localhost:8181/v1/config || (echo "REST catalog failed to start"; exit 1)
+
+      - name: Generate pathological tables
+        working-directory: sandbox
+        run: |
+          docker compose exec -T spark-iceberg \
+            spark-submit /opt/sandbox/generate_pathologies.py
+
+      - name: frost list
+        env:
+          AWS_ACCESS_KEY_ID: admin
+          AWS_SECRET_ACCESS_KEY: password
+          AWS_REGION: us-east-1
+          AWS_ENDPOINT_URL_S3: http://localhost:9000
+          AWS_ALLOW_HTTP: "true"
+        run: |
+          cat > frost.toml <<EOF
+          [catalog]
+          type = "rest"
+          uri = "http://localhost:8181"
+          warehouse = "s3://warehouse/"
+          EOF
+          ./target/release/frost --config frost.toml list
+
+      - name: frost check small_files_table
+        env:
+          AWS_ACCESS_KEY_ID: admin
+          AWS_SECRET_ACCESS_KEY: password
+          AWS_REGION: us-east-1
+          AWS_ENDPOINT_URL_S3: http://localhost:9000
+          AWS_ALLOW_HTTP: "true"
+        run: |
+          # Expected: at least a small_files warning. Exit 1 on critical is OK.
+          ./target/release/frost --config frost.toml check \
+            frost_test.small_files_table -f json > report.json || true
+          cat report.json
+          # Sanity-check that we actually loaded data files (so REST+S3 worked).
+          python3 -c "import json,sys; r=json.load(open('report.json')); \
+            assert r['summary']['data_file_count'] > 0, 'no data files — manifest fetch failed'; \
+            print('OK: data_file_count=', r['summary']['data_file_count'])"
+
+      - name: frost check snapshot_bloat_table
+        env:
+          AWS_ACCESS_KEY_ID: admin
+          AWS_SECRET_ACCESS_KEY: password
+          AWS_REGION: us-east-1
+          AWS_ENDPOINT_URL_S3: http://localhost:9000
+          AWS_ALLOW_HTTP: "true"
+        run: |
+          ./target/release/frost --config frost.toml check \
+            frost_test.snapshot_bloat_table -f json > bloat.json || true
+          python3 -c "import json; r=json.load(open('bloat.json')); \
+            f=next(x for x in r['findings'] if x['check_id']=='snapshot_bloat'); \
+            assert f['severity'] in ('warning','critical'), f; \
+            print('OK: snapshot_bloat severity=', f['severity'])"
+
+      - name: Dump logs on failure
+        if: failure()
+        working-directory: sandbox
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        working-directory: sandbox
+        run: docker compose down -v

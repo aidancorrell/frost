@@ -49,19 +49,43 @@ All thresholds are configurable in `frost.toml`.
 
 ## Quick Start
 
-### Install from source
+### Install
 
 ```bash
-# CLI
-cargo install --path crates/frost-cli
+# From crates.io (recommended)
+cargo install frost-cli
+cargo install frost-mcp
 
-# MCP server
+# Or from source
+cargo install --path crates/frost-cli
 cargo install --path crates/frost-mcp
+
+# Pre-built binaries (Linux/macOS/Windows, x86_64 + aarch64) are published
+# on each tagged release at:
+# https://github.com/aidancorrell/frost/releases
+
+# Container image:
+# docker pull ghcr.io/aidancorrell/frost:latest
 ```
+
+### Try without a real catalog
+
+```bash
+# Runs all checks against a synthetic table so you can see the output
+frost demo
+frost demo -f json
+```
+
+When you want real findings, point `frost` at a catalog. It will exit with
+a clear error (exit code 2) if the catalog isn't reachable — it never falls
+back to synthetic data silently.
 
 ### CLI Usage
 
 ```bash
+# Show a sample report against synthetic data (no catalog needed)
+frost demo
+
 # Check a table against a local warehouse
 frost check db.events --warehouse ./warehouse
 

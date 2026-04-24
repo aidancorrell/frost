@@ -4,6 +4,12 @@ description = "CLI for frost — Iceberg table health checks for humans"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/frost-cli"
+readme = "../../README.md"
+keywords = ["iceberg", "data-lake", "table-health", "cli", "ci"]
+categories = ["command-line-utilities", "database"]
 
 [[bin]]
 name = "frost"

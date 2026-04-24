@@ -4,6 +4,12 @@ description = "MCP server for frost — agent-first Iceberg table health tools"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/frost-mcp"
+readme = "../../README.md"
+keywords = ["iceberg", "mcp", "agent", "llm", "data-lake"]
+categories = ["command-line-utilities", "database"]
 
 [[bin]]
 name = "frost-mcp"
