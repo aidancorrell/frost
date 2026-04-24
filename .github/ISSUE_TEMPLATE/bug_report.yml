@@ -1,0 +1,63 @@
+name: Bug report
+description: Report something frost does wrong
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! Please include enough
+        context that we can reproduce the issue locally.
+  - type: input
+    id: frost-version
+    attributes:
+      label: frost version
+      description: Output of `frost --version`
+      placeholder: "frost 0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: interface
+    attributes:
+      label: Interface
+      options:
+        - CLI (`frost`)
+        - MCP server (`frost-mcp`)
+        - Library (`frost-core`)
+    validations:
+      required: true
+  - type: dropdown
+    id: catalog
+    attributes:
+      label: Catalog backend
+      options:
+        - Filesystem
+        - REST (Polaris / Lakekeeper / Nessie / other)
+        - REST (Unity Catalog)
+        - Glue
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Commands, config, and table metadata characteristics
+      placeholder: |
+        1. `frost check db.events --warehouse s3://...`
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the full output of `RUST_LOG=frost=debug <command>`
+    validations:
+      required: true

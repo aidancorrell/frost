@@ -5,14 +5,17 @@
 //! Polaris, Lakekeeper, Unity Catalog, Gravitino, Nessie, and any other
 //! implementation of the Iceberg REST spec.
 //!
-//! Key insight: the load-table endpoint returns the full table metadata inline,
-//! so frost doesn't need to separately download metadata.json from object storage.
-//! Manifest files are still referenced by path (typically s3://) and can't be
-//! fetched through the REST API — metadata-level checks work without them.
+//! The load-table endpoint returns the full table metadata inline. Manifest
+//! lists and manifests are referenced by object-storage paths (typically
+//! `s3://...`) and are fetched through `frost_core::object_store`, which uses
+//! the standard AWS credential chain for SigV4-signed S3 reads. File-level
+//! checks (small_files, partition_skew, delete_pressure, orphan_files) now
+//! work on REST-backed warehouses.
 
 use crate::catalog::{CatalogError, CatalogProvider};
 use crate::metadata::TableMetadata;
-use crate::parse::metadata_json;
+use crate::object_store;
+use crate::parse::{manifest, metadata_json};
 use reqwest::Client;
 use serde::Deserialize;
 use std::future::Future;
@@ -119,14 +122,37 @@ impl CatalogProvider for RestCatalog {
             };
 
             let metadata_str = metadata_value.to_string();
-            let table_meta = metadata_json::parse_metadata_json(&metadata_str, &table_id)
+            let mut table_meta = metadata_json::parse_metadata_json(&metadata_str, &table_id)
                 .map_err(|e| CatalogError::Parse(e.to_string()))?;
 
-            // Note: manifest files are referenced by s3:// paths in the metadata.
-            // The REST API doesn't serve manifest content — frost's metadata-level
-            // checks (snapshot bloat, schema history, sort order, freshness) work
-            // without manifest data. File-level checks (small_files, delete_pressure,
-            // orphan_files) will report no findings since data_files is empty.
+            // Fetch the current snapshot's manifest list and manifests through
+            // the object-store abstraction (S3 / GCS / HTTP / local file).
+            // Failures here are logged and non-fatal: metadata-only checks
+            // still work, but file-level checks need the manifests.
+            let current_snap = table_meta
+                .snapshots
+                .iter()
+                .find(|s| Some(s.snapshot_id) == table_meta.current_snapshot_id)
+                .or_else(|| table_meta.snapshots.last())
+                .cloned();
+
+            if let Some(snapshot) = current_snap
+                && !snapshot.manifest_list.is_empty()
+            {
+                match fetch_and_parse_manifests(&snapshot.manifest_list).await {
+                    Ok((data_files, delete_files)) => {
+                        table_meta.data_files.extend(data_files);
+                        table_meta.delete_files.extend(delete_files);
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "REST catalog: failed to fetch manifests from {}: {}",
+                            snapshot.manifest_list,
+                            e
+                        );
+                    }
+                }
+            }
 
             Ok(table_meta)
         })
@@ -213,6 +239,67 @@ impl RestCatalog {
             .map(|parts| parts.join("."))
             .collect())
     }
+}
+
+/// Fetch a manifest list from object storage, then each referenced manifest,
+/// returning aggregated (data_files, delete_files).
+async fn fetch_and_parse_manifests(
+    manifest_list_uri: &str,
+) -> Result<
+    (
+        Vec<crate::metadata::DataFile>,
+        Vec<crate::metadata::DeleteFile>,
+    ),
+    object_store::ObjectStoreError,
+> {
+    // Download manifest list to a temp file so the Avro parser can open it.
+    let (tmp, ml_path) =
+        object_store::fetch_to_tempfile(manifest_list_uri, "manifest-list.avro").await?;
+    let entries = manifest::parse_manifest_list(&ml_path)
+        .map_err(|e| object_store::ObjectStoreError::Http(format!("parse manifest list: {e}")))?;
+
+    let mut data_files = Vec::new();
+    let mut delete_files = Vec::new();
+
+    for entry in &entries {
+        let filename = std::path::PathBuf::from(&entry.manifest_path)
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "manifest.avro".to_string());
+
+        match object_store::fetch_bytes(&entry.manifest_path).await {
+            Ok(bytes) => {
+                let m_path = tmp.path().join(&filename);
+                if tokio::fs::write(&m_path, &bytes).await.is_ok() {
+                    match manifest::parse_manifest(&m_path) {
+                        Ok((data, deletes)) => {
+                            data_files.extend(data);
+                            delete_files.extend(deletes);
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "REST catalog: failed to parse manifest {}: {}",
+                                entry.manifest_path,
+                                e
+                            );
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "REST catalog: failed to fetch manifest {}: {}",
+                    entry.manifest_path,
+                    e
+                );
+            }
+        }
+    }
+
+    // Keep tmp alive until here.
+    drop(tmp);
+
+    Ok((data_files, delete_files))
 }
 
 fn parse_table_identifier(identifier: &str) -> Result<(String, String), CatalogError> {

@@ -4,6 +4,12 @@ description = "Iceberg table health check engine — metadata-only analysis, cos
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/frost-core"
+readme = "../../README.md"
+keywords = ["iceberg", "data-lake", "table-health", "observability", "mcp"]
+categories = ["database", "command-line-utilities"]
 
 [dependencies]
 serde = { workspace = true }
@@ -19,11 +25,13 @@ glob = "0.3"
 rusqlite = { version = "0.35", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 aws-config = { version = "1", optional = true }
+aws-sdk-s3 = { version = "1", optional = true }
 aws-sdk-glue = { version = "1", optional = true }
+tempfile = "3"
 
 [features]
-default = []
-glue = ["aws-config", "aws-sdk-glue"]
+default = ["s3"]
+s3 = ["aws-config", "aws-sdk-s3"]
+glue = ["aws-config", "aws-sdk-s3", "aws-sdk-glue"]
 
 [dev-dependencies]
-tempfile = "3"
