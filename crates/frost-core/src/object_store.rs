@@ -91,7 +91,13 @@ async fn fetch_s3(stripped: &str) -> Result<Vec<u8>, ObjectStoreError> {
         .ok_or_else(|| ObjectStoreError::InvalidUri(format!("s3://{stripped}")))?;
 
     let config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
-    let client = aws_sdk_s3::Client::new(&config);
+    // Path-style addressing works for real S3 and is required for most
+    // S3-compatible stores (MinIO, LocalStack) that lack wildcard-DNS for
+    // virtual-hosted-style URLs.
+    let s3_config = aws_sdk_s3::config::Builder::from(&config)
+        .force_path_style(true)
+        .build();
+    let client = aws_sdk_s3::Client::from_conf(s3_config);
 
     let resp = client
         .get_object()
