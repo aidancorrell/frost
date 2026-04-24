@@ -137,6 +137,7 @@ async fn main() {
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "frost=info".parse().unwrap()),
         )
+        .with_writer(std::io::stderr)
         .init();
 
     let cli = Cli::parse();
