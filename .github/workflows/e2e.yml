@@ -2,12 +2,10 @@ name: E2E (sandbox)
 
 # End-to-end smoke test against the sandbox/ docker-compose stack:
 # Spark-Iceberg + Iceberg REST catalog + MinIO. Verifies frost can talk to
-# a real REST catalog and fetch manifests through S3 (MinIO). Heavy — runs
-# on nightly schedule and on-demand, not on every PR.
+# a real REST catalog and fetch manifests through S3 (MinIO). Heavy —
+# runs on-demand and on-push to relevant files, not on every PR.
 
 on:
-  schedule:
-    - cron: "0 9 * * *"  # 09:00 UTC daily
   workflow_dispatch:
   push:
     branches: [main]
