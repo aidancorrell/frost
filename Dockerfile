@@ -1,7 +1,7 @@
 # Multi-stage build for the frost MCP server.
 # Produces a minimal image with just the frost-mcp binary.
 
-FROM rust:1.87-bookworm AS builder
+FROM rust:1.91-bookworm AS builder
 
 WORKDIR /build
 
