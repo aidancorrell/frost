@@ -52,21 +52,20 @@ All thresholds are configurable in `frost.toml`.
 ### Install
 
 ```bash
-# From crates.io (recommended)
-cargo install frost-cli
-cargo install frost-mcp
-
-# Or from source
-cargo install --path crates/frost-cli
-cargo install --path crates/frost-mcp
-
-# Pre-built binaries (Linux/macOS/Windows, x86_64 + aarch64) are published
-# on each tagged release at:
-# https://github.com/aidancorrell/frost/releases
+# Pre-built binaries (Linux/macOS/Windows, x86_64 + aarch64) on every
+# tagged release: https://github.com/aidancorrell/frost/releases
 
 # Container image:
-# docker pull ghcr.io/aidancorrell/frost:latest
+docker pull ghcr.io/aidancorrell/frost:latest
+
+# From source:
+git clone https://github.com/aidancorrell/frost && cd frost
+cargo install --path crates/frost-cli
+cargo install --path crates/frost-mcp
 ```
+
+> crates.io publication is planned but not yet wired into the release
+> pipeline. For now, install from source or the GitHub Release artifacts.
 
 ### Try without a real catalog
 
@@ -368,9 +367,9 @@ cargo test --workspace
 # Run with verbose logging
 RUST_LOG=frost=debug frost check db.events --warehouse ./warehouse
 
-# Local dev environment (Spark + Iceberg + MinIO)
-cd sandbox && docker-compose up -d
-python generate_pathologies.py
+# Local dev environment (Spark + Iceberg REST catalog + MinIO)
+cd sandbox && docker compose up -d
+docker compose exec -T spark-iceberg spark-submit /opt/sandbox/generate_pathologies.py
 ```
 
 ### Test Coverage

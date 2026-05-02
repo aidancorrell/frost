@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-05-02
+
 ### Added
 - `LICENSE`, `CONTRIBUTING.md`, `CHANGELOG.md`, `SECURITY.md`,
   `CODE_OF_CONDUCT.md` for OSS hygiene.
@@ -35,11 +37,22 @@ adheres to [Semantic Versioning](https://semver.org/).
 - `frost check` no longer silently falls back to synthetic demo data when
   a catalog load fails. It reports the error and exits non-zero. Use
   `frost demo` if you want the synthetic report.
+- S3 client now uses path-style addressing, so MinIO and other
+  S3-compatible stores (Ceph, Wasabi, R2 with path-style) work without
+  custom DNS. Real AWS S3 still works — path-style is universally
+  supported there.
+- E2E workflow no longer runs on a nightly cron; kept on-demand
+  (`workflow_dispatch`) and on-push (catalog/object-store path-scoped)
+  triggers to avoid burning Actions minutes on a project with no users.
 
 ### Fixed
 - REST catalog's `load_table` returned metadata without data files on all
   catalogs — see "Added" above.
 - Glue catalog would fail to download metadata from any private bucket.
+- `frost check -f json` produced unparseable output when redirected
+  with `>`. The `tracing` subscriber defaulted to stdout and prepended
+  ANSI-colored log lines to the JSON document. Logs now go to stderr,
+  so `frost check ... -f json > out.json` produces a clean JSON file.
 
 ### Known follow-ups (tracked in `ROADMAP.md`)
 - Hive Metastore catalog (Phase 7).
