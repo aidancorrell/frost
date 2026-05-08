@@ -60,6 +60,19 @@ enum Commands {
         /// Finding ID (e.g., "small_files", "snapshot_bloat").
         finding: String,
     },
+    /// Fleet-level signals across all tables.
+    Fleet {
+        /// Optional namespace filter.
+        namespace: Option<String>,
+
+        /// Days since last commit before a table is "dormant". Default: 90.
+        #[arg(long, default_value = "90")]
+        dormant_days: i64,
+
+        /// Output format.
+        #[arg(long, short, value_enum, default_value = "pretty")]
+        format: Format,
+    },
     /// List all tables in a catalog.
     List {
         /// Optional namespace filter.
@@ -86,6 +99,23 @@ enum Commands {
         /// SQLite database path for state.
         #[arg(long, default_value = "./frost-watch.db")]
         db: String,
+    },
+    /// Show rolling trends for a watched table from the state database.
+    WatchTrends {
+        /// Table identifier.
+        table: String,
+
+        /// Lookback window in days. Default: 7.
+        #[arg(long, default_value = "7")]
+        days: i64,
+
+        /// SQLite database path.
+        #[arg(long, default_value = "./frost-watch.db")]
+        db: String,
+
+        /// Output format.
+        #[arg(long, short, value_enum, default_value = "pretty")]
+        format: Format,
     },
     /// Show current watch mode status from the state database.
     WatchStatus {
@@ -269,6 +299,62 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Commands::WatchTrends {
+            table,
+            days,
+            db,
+            format,
+        } => {
+            let watch_db = match frost_core::watch::WatchDb::open(&db) {
+                Ok(db) => db,
+                Err(e) => {
+                    eprintln!(
+                        "{} Failed to open watch database: {}",
+                        "error:".red().bold(),
+                        e
+                    );
+                    std::process::exit(1);
+                }
+            };
+
+            let trend = match watch_db.compute_trend(&table, days) {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("{} Failed to compute trend: {}", "error:".red().bold(), e);
+                    std::process::exit(1);
+                }
+            };
+
+            match format {
+                Format::Json => {
+                    println!("{}", serde_json::to_string_pretty(&trend).unwrap());
+                }
+                _ => {
+                    println!();
+                    println!("{}", "Watch Trend".bold().underline());
+                    println!();
+                    println!("  Table:           {}", trend.table_name.bold());
+                    println!("  Window:          {} days", trend.lookback_days);
+                    println!("  Samples:         {}", trend.sample_count);
+                    let classified = match trend.classification.as_str() {
+                        "improving" => trend.classification.green().to_string(),
+                        "degrading" => trend.classification.red().bold().to_string(),
+                        "flapping" => trend.classification.yellow().bold().to_string(),
+                        "stable" => trend.classification.green().to_string(),
+                        _ => trend.classification.dimmed().to_string(),
+                    };
+                    println!("  Classification:  {}", classified);
+                    println!(
+                        "  Findings:        first {}, last {}, avg {:.1}",
+                        trend.first_finding_count,
+                        trend.last_finding_count,
+                        trend.avg_finding_count,
+                    );
+                    println!("  Severity flips:  {}", trend.severity_transitions);
+                    println!();
+                }
+            }
+        }
         Commands::WatchStatus { table, db, format } => {
             let watch_db = match frost_core::watch::WatchDb::open(&db) {
                 Ok(db) => db,
@@ -359,6 +445,107 @@ async fn main() {
             let metadata = generate_demo_metadata(&table);
             let report = engine::check_table(&metadata, &config);
             render_report(&report, format.into());
+        }
+        Commands::Fleet {
+            namespace,
+            dormant_days,
+            format,
+        } => {
+            let provider = match catalog::from_config(&config.catalog) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("{} {}", "error:".red().bold(), e);
+                    std::process::exit(1);
+                }
+            };
+
+            let tables = match provider.list_tables(namespace.as_deref()).await {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("{} {}", "error:".red().bold(), e);
+                    std::process::exit(1);
+                }
+            };
+
+            let mut inputs: Vec<frost_core::fleet::FleetInput> = Vec::new();
+            let mut unreadable = 0usize;
+            for tid in &tables {
+                match provider.load_table(tid).await {
+                    Ok(meta) => inputs.push(frost_core::fleet::FleetInput::from_metadata(
+                        tid.clone(),
+                        meta,
+                        &config,
+                    )),
+                    Err(e) => {
+                        eprintln!("warning: failed to load '{}': {}", tid, e);
+                        unreadable += 1;
+                    }
+                }
+            }
+
+            let report =
+                frost_core::fleet::compute_fleet_report(inputs, unreadable, Some(dormant_days));
+
+            match format {
+                Format::Json => {
+                    println!("{}", serde_json::to_string_pretty(&report).unwrap());
+                }
+                _ => {
+                    println!();
+                    println!("{}", "Fleet Health".bold().underline());
+                    println!();
+                    println!("  Tables scanned:    {}", report.tables_scanned);
+                    if report.tables_unreadable > 0 {
+                        println!(
+                            "  Unreadable:        {}",
+                            report.tables_unreadable.to_string().yellow()
+                        );
+                    }
+                    let crit = *report.by_severity.get("CRITICAL").unwrap_or(&0);
+                    let warn = *report.by_severity.get("WARNING").unwrap_or(&0);
+                    let pass = *report.by_severity.get("PASS").unwrap_or(&0);
+                    println!(
+                        "  Severity:          {} critical, {} warning, {} pass",
+                        crit.to_string().red().bold(),
+                        warn.to_string().yellow(),
+                        pass.to_string().green(),
+                    );
+                    println!(
+                        "  Dormant tables:    {} (>{} days since last commit)",
+                        report.dormant_tables.len(),
+                        dormant_days
+                    );
+                    println!("  Unpartitioned:     {}", report.unpartitioned_tables.len());
+                    println!("  Format-v1 tables:  {}", report.format_v1_tables.len());
+
+                    if !report.namespaces.is_empty() {
+                        println!();
+                        println!("{}", "By Namespace".bold());
+                        for ns in &report.namespaces {
+                            println!(
+                                "  {:<30} {} tables ({}c {}w {}h)",
+                                ns.namespace, ns.table_count, ns.critical, ns.warning, ns.healthy,
+                            );
+                        }
+                    }
+                    if !report.top_offenders.is_empty() {
+                        println!();
+                        println!("{}", "Top Offenders".bold());
+                        for t in &report.top_offenders {
+                            let sev = match t.severity.as_str() {
+                                "CRITICAL" => t.severity.red().bold().to_string(),
+                                "WARNING" => t.severity.yellow().to_string(),
+                                _ => t.severity.green().to_string(),
+                            };
+                            println!(
+                                "  {:<40} {} ({}c {}w)",
+                                t.table_name, sev, t.critical_count, t.warning_count,
+                            );
+                        }
+                    }
+                    println!();
+                }
+            }
         }
         Commands::List { namespace, format } => {
             let provider = match catalog::from_config(&config.catalog) {
@@ -466,6 +653,7 @@ fn generate_demo_metadata(table_identifier: &str) -> TableMetadata {
             record_count: 1_500_000,
             partition,
             file_format: FileFormat::Parquet,
+            ..Default::default()
         });
     }
     for i in 50..75 {
@@ -480,6 +668,7 @@ fn generate_demo_metadata(table_identifier: &str) -> TableMetadata {
             record_count: 500,
             partition,
             file_format: FileFormat::Parquet,
+            ..Default::default()
         });
     }
 
@@ -495,19 +684,33 @@ fn generate_demo_metadata(table_identifier: &str) -> TableMetadata {
     let snapshots: Vec<Snapshot> = (0..120)
         .map(|i| Snapshot {
             snapshot_id: i + 1,
+            parent_snapshot_id: if i == 0 { None } else { Some(i) },
             timestamp_ms: (now - chrono::Duration::hours(i * 2)).timestamp_millis(),
+            operation: Some("append".to_string()),
             summary: Default::default(),
             manifest_list: format!(
                 "s3://demo-bucket/warehouse/{}/metadata/snap-{}-manifest-list.avro",
                 table_identifier,
                 i + 1
             ),
+            schema_id: Some(1),
         })
         .collect();
 
     TableMetadata {
         table_name: table_identifier.to_string(),
         location: format!("s3://demo-bucket/warehouse/{}", table_identifier),
+        format_version: 2,
+        table_uuid: Some("demo-uuid-0001".to_string()),
+        properties: {
+            let mut p = HashMap::new();
+            p.insert(
+                "write.target-file-size-bytes".to_string(),
+                "536870912".to_string(),
+            );
+            p.insert("write.distribution-mode".to_string(), "hash".to_string());
+            p
+        },
         current_schema: Schema {
             schema_id: 1,
             fields: vec![
@@ -620,11 +823,23 @@ fn generate_demo_metadata(table_identifier: &str) -> TableMetadata {
                 transform: "day".to_string(),
             }],
         },
+        partition_specs: vec![PartitionSpec {
+            spec_id: 0,
+            fields: vec![PartitionField {
+                source_id: 5,
+                field_id: 1000,
+                name: "date".to_string(),
+                transform: "day".to_string(),
+            }],
+        }],
         sort_order: None,
+        sort_orders: vec![],
+        refs: HashMap::new(),
         data_files,
         delete_files: vec![],
         all_storage_paths,
         metadata_size_bytes: 45 * 1024 * 1024,
+        manifest_stats: Default::default(),
         collected_at: now,
     }
 }

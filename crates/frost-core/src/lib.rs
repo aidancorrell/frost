@@ -10,6 +10,7 @@ pub mod config;
 pub mod cost;
 pub mod engine;
 pub mod fix;
+pub mod fleet;
 pub mod metadata;
 pub mod object_store;
 pub mod parse;

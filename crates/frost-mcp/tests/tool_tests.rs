@@ -209,7 +209,11 @@ async fn watch_status_returns_no_data() {
 
     let server = FrostServer::new(config);
     let result = server
-        .run_watch_status(frost_mcp::tools::WatchStatusParams { table: None })
+        .run_watch_status(frost_mcp::tools::WatchStatusParams {
+            table: None,
+            include_trend: None,
+            trend_days: None,
+        })
         .await;
 
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();

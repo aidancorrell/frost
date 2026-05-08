@@ -57,20 +57,33 @@ pub fn make_test_metadata() -> TableMetadata {
         }],
         snapshots: vec![Snapshot {
             snapshot_id: 1,
+            parent_snapshot_id: None,
             timestamp_ms: Utc::now().timestamp_millis(),
+            operation: Some("append".to_string()),
             summary: Default::default(),
             manifest_list: "s3://test-bucket/metadata/snap-1-manifest-list.avro".to_string(),
+            schema_id: Some(0),
         }],
         current_snapshot_id: Some(1),
         partition_spec: PartitionSpec {
             spec_id: 0,
             fields: vec![],
         },
+        partition_specs: vec![PartitionSpec {
+            spec_id: 0,
+            fields: vec![],
+        }],
         sort_order: None,
+        sort_orders: vec![],
+        refs: Default::default(),
+        format_version: 2,
+        table_uuid: None,
+        properties: Default::default(),
         data_files: vec![],
         delete_files: vec![],
         all_storage_paths: vec![],
         metadata_size_bytes: 1024 * 100, // 100 KB
+        manifest_stats: Default::default(),
         collected_at: Utc::now(),
     }
 }

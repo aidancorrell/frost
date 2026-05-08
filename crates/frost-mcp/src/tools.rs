@@ -24,10 +24,28 @@ pub struct CheckCatalogParams {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct CheckFleetParams {
+    /// Optional namespace filter.
+    #[serde(default)]
+    pub namespace: Option<String>,
+    /// Days since last commit before a table is "dormant". Default: 90.
+    #[serde(default)]
+    pub dormant_days: Option<i64>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetFixParams {
     /// Table identifier (e.g., "db.events").
     pub table: String,
     /// Finding ID to generate a fix for (e.g., "small_files", "snapshot_bloat").
+    pub finding_id: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DryRunFixParams {
+    /// Table identifier (e.g., "db.events").
+    pub table: String,
+    /// Finding ID to dry-run (e.g., "small_files").
     pub finding_id: String,
 }
 
@@ -42,6 +60,15 @@ pub struct WatchStatusParams {
     /// Optional table identifier (default: all watched tables).
     #[serde(default)]
     pub table: Option<String>,
+    /// If true, include rolling trend signals (improving/degrading/flapping)
+    /// for the table(s) over the past `trend_days` window. Default: true
+    /// when `table` is set, false otherwise (computing trends across all
+    /// tables can be expensive).
+    #[serde(default)]
+    pub include_trend: Option<bool>,
+    /// Lookback window for trend computation. Default: 7.
+    #[serde(default)]
+    pub trend_days: Option<i64>,
 }
 
 // --- Tool Responses ---
@@ -82,6 +109,10 @@ pub struct WatchTableHealth {
     pub severity: String,
     pub finding_count: usize,
     pub last_checked: String,
+    /// Rolling trend classification — populated only when the caller asks
+    /// for it (or the request was for a single table).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trend: Option<frost_core::watch::TableTrend>,
 }
 
 #[derive(Debug, Serialize)]

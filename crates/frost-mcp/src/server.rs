@@ -3,6 +3,7 @@
 use crate::tools::*;
 use frost_core::catalog;
 use frost_core::config::FrostConfig;
+use frost_core::fleet::{FleetInput, compute_fleet_report};
 use frost_core::report::Severity;
 use frost_core::{cost, engine, fix};
 use rmcp::handler::server::wrapper::Parameters;
@@ -131,6 +132,50 @@ impl FrostServer {
         serde_json::to_string_pretty(&summary).unwrap()
     }
 
+    /// Compute fleet-level signals across all tables in a catalog.
+    pub async fn run_check_fleet(&self, params: CheckFleetParams) -> String {
+        let provider = match catalog::from_config(&self.config.catalog) {
+            Ok(p) => p,
+            Err(e) => {
+                return serde_json::to_string_pretty(
+                    &serde_json::json!({"error": format!("Catalog error: {}", e)}),
+                )
+                .unwrap();
+            }
+        };
+
+        let tables = match provider.list_tables(params.namespace.as_deref()).await {
+            Ok(t) => t,
+            Err(e) => {
+                return serde_json::to_string_pretty(
+                    &serde_json::json!({"error": format!("Failed to list tables: {}", e)}),
+                )
+                .unwrap();
+            }
+        };
+
+        let mut inputs: Vec<FleetInput> = Vec::with_capacity(tables.len());
+        let mut unreadable = 0usize;
+        for table_id in &tables {
+            match provider.load_table(table_id).await {
+                Ok(metadata) => {
+                    inputs.push(FleetInput::from_metadata(
+                        table_id.clone(),
+                        metadata,
+                        &self.config,
+                    ));
+                }
+                Err(e) => {
+                    tracing::warn!("check_fleet: failed to load '{}': {}", table_id, e);
+                    unreadable += 1;
+                }
+            }
+        }
+
+        let report = compute_fleet_report(inputs, unreadable, params.dormant_days);
+        serde_json::to_string_pretty(&report).unwrap()
+    }
+
     /// Generate a fix command (public for testing).
     pub async fn run_get_fix(&self, params: GetFixParams) -> String {
         let metadata = match self.load_table(&params.table).await {
@@ -146,8 +191,38 @@ impl FrostServer {
                 "error": format!("No fix available for finding '{}'", params.finding_id),
                 "available_findings": [
                     "small_files", "snapshot_bloat", "orphan_files",
-                    "delete_pressure", "metadata_size", "partition_skew"
+                    "delete_pressure", "metadata_size", "partition_skew",
+                    "format_v1", "properties_drift", "partition_spec_evolution",
+                    "sort_compliance", "stats_coverage"
                 ]
+            }))
+            .unwrap(),
+        }
+    }
+
+    /// Dry-run a fix: return the scope (what will change) without exposing
+    /// the executable command. Lets agents reason about cost before
+    /// committing.
+    pub async fn run_dry_run_fix(&self, params: DryRunFixParams) -> String {
+        let metadata = match self.load_table(&params.table).await {
+            Ok(m) => m,
+            Err(e) => {
+                return serde_json::to_string_pretty(&serde_json::json!({"error": e})).unwrap();
+            }
+        };
+
+        match fix::generate_fix(&metadata, &params.finding_id) {
+            Some(cmd) => serde_json::to_string_pretty(&serde_json::json!({
+                "finding_id": cmd.finding_id,
+                "table_name": cmd.table_name,
+                "description": cmd.description,
+                "warnings": cmd.warnings,
+                "scope": cmd.scope,
+                "note": "This is a dry run — no command was returned. Call get_fix to get the executable command."
+            }))
+            .unwrap(),
+            None => serde_json::to_string_pretty(&serde_json::json!({
+                "error": format!("No fix available for finding '{}'", params.finding_id),
             }))
             .unwrap(),
         }
@@ -210,13 +285,29 @@ impl FrostServer {
             .unwrap();
         }
 
+        let trend_days = params.trend_days.unwrap_or(7);
+        // Default: compute trend if a single table was requested, skip if
+        // the caller asked for the whole catalog (trend computation runs
+        // per table).
+        let want_trend = params
+            .include_trend
+            .unwrap_or_else(|| params.table.is_some());
+
         let table_health: Vec<WatchTableHealth> = latest
             .iter()
-            .map(|r| WatchTableHealth {
-                table_name: r.table_name.clone(),
-                severity: r.severity.clone(),
-                finding_count: r.finding_count,
-                last_checked: r.checked_at.to_rfc3339(),
+            .map(|r| {
+                let trend = if want_trend {
+                    db.compute_trend(&r.table_name, trend_days).ok()
+                } else {
+                    None
+                };
+                WatchTableHealth {
+                    table_name: r.table_name.clone(),
+                    severity: r.severity.clone(),
+                    finding_count: r.finding_count,
+                    last_checked: r.checked_at.to_rfc3339(),
+                    trend,
+                }
             })
             .collect();
 
@@ -267,10 +358,24 @@ impl FrostServer {
     }
 
     #[tool(
-        description = "Generate a Spark SQL fix command for a specific health finding on a table."
+        description = "Fleet-level signals across all tables: per-namespace rollup, dormant tables (no recent commits), unpartitioned tables, format-v1 tables, and the top-N offenders. Use this when you own a fleet rather than a single table."
+    )]
+    async fn check_fleet(&self, Parameters(params): Parameters<CheckFleetParams>) -> String {
+        self.run_check_fleet(params).await
+    }
+
+    #[tool(
+        description = "Generate a Spark SQL fix command for a specific health finding on a table. Includes scope (estimated_files, estimated_bytes, estimated_partitions, estimated_snapshots_expired)."
     )]
     async fn get_fix(&self, Parameters(params): Parameters<GetFixParams>) -> String {
         self.run_get_fix(params).await
+    }
+
+    #[tool(
+        description = "Dry-run a fix: returns the scope (estimated files/bytes/partitions affected) without an executable command. Use to reason about fix cost before committing."
+    )]
+    async fn dry_run_fix(&self, Parameters(params): Parameters<DryRunFixParams>) -> String {
+        self.run_dry_run_fix(params).await
     }
 
     #[tool(description = "Estimate monthly cost waste from health issues on an Iceberg table.")]

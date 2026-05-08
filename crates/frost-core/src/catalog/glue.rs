@@ -119,6 +119,7 @@ impl CatalogProvider for GlueCatalog {
                 std::fs::write(&ml_path, &ml_bytes).map_err(CatalogError::Io)?;
 
                 if let Ok(entries) = manifest::parse_manifest_list(&ml_path) {
+                    table_meta.manifest_stats = manifest::manifest_stats_from_list(&entries);
                     for entry in &entries {
                         if let Ok(m_bytes) = download_s3_bytes(&entry.manifest_path).await {
                             let m_path = tmp_dir.path().join(
