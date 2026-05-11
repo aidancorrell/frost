@@ -50,6 +50,24 @@ pub struct Thresholds {
     pub stale_table_hours: u64,
     /// Maximum total metadata size in bytes before flagging. Default: 500 MB.
     pub max_metadata_bytes: u64,
+    /// Number of distinct partition specs (incl. retired ones) before
+    /// flagging spec-evolution churn. Default: 3.
+    pub max_partition_specs: usize,
+    /// Minimum % of data files (0–100) that must declare a sort order ID
+    /// matching the table's default. Below this, sort_compliance flags.
+    /// Default: 80.
+    pub min_sort_compliance_pct: f64,
+    /// Minimum % of data files that must report at least one column's
+    /// lower/upper bounds (or value_counts) for stats_coverage to pass.
+    /// Default: 50.
+    pub min_stats_coverage_pct: f64,
+    /// Branch is considered stale if its target snapshot was committed
+    /// more than this many days ago. Default: 30.
+    pub stale_branch_days: u64,
+    /// Variance allowed between `write.target-file-size-bytes` and the
+    /// observed median data file size before flagging properties_drift.
+    /// Default: 50% (0.5).
+    pub target_file_size_drift_pct: f64,
 }
 
 /// S3 pricing model for cost estimation.
@@ -62,6 +80,19 @@ pub struct CostConfig {
     pub s3_get_request_per_1000: f64,
     /// AWS region (for pricing context).
     pub region: String,
+    /// Assumed queries-per-day issued against this table. Used to scale
+    /// small-files and metadata-size cost estimates. Make this match
+    /// reality for your workload — defaults to 100.
+    pub queries_per_day: f64,
+    /// Compute cost per CPU-hour for the engine that runs queries
+    /// against this table. Used to model scan-time overhead from delete
+    /// files and small-file planning. Defaults to $0.05/CPU-hour
+    /// (rough mid-point of EMR/spot pricing).
+    pub compute_cost_per_cpu_hour: f64,
+    /// Average bytes scanned per query against this table. Used to
+    /// estimate the overhead delete files add (a percentage of normal
+    /// scan time). Defaults to 1 GB.
+    pub avg_bytes_scanned_per_query: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,6 +130,11 @@ impl Default for Thresholds {
             max_delete_files: 50,
             stale_table_hours: 48,
             max_metadata_bytes: 500 * 1024 * 1024, // 500 MB
+            max_partition_specs: 3,
+            min_sort_compliance_pct: 80.0,
+            min_stats_coverage_pct: 50.0,
+            stale_branch_days: 30,
+            target_file_size_drift_pct: 0.5,
         }
     }
 }
@@ -109,6 +145,9 @@ impl Default for CostConfig {
             s3_storage_per_gb_month: 0.023,
             s3_get_request_per_1000: 0.0004,
             region: "us-east-1".to_string(),
+            queries_per_day: 100.0,
+            compute_cost_per_cpu_hour: 0.05,
+            avg_bytes_scanned_per_query: 1024 * 1024 * 1024,
         }
     }
 }

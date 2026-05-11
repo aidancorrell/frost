@@ -140,9 +140,10 @@ impl CatalogProvider for RestCatalog {
                 && !snapshot.manifest_list.is_empty()
             {
                 match fetch_and_parse_manifests(&snapshot.manifest_list).await {
-                    Ok((data_files, delete_files)) => {
+                    Ok((data_files, delete_files, manifest_stats)) => {
                         table_meta.data_files.extend(data_files);
                         table_meta.delete_files.extend(delete_files);
+                        table_meta.manifest_stats = manifest_stats;
                     }
                     Err(e) => {
                         tracing::warn!(
@@ -242,13 +243,14 @@ impl RestCatalog {
 }
 
 /// Fetch a manifest list from object storage, then each referenced manifest,
-/// returning aggregated (data_files, delete_files).
+/// returning aggregated (data_files, delete_files, manifest_stats).
 async fn fetch_and_parse_manifests(
     manifest_list_uri: &str,
 ) -> Result<
     (
         Vec<crate::metadata::DataFile>,
         Vec<crate::metadata::DeleteFile>,
+        crate::metadata::ManifestStats,
     ),
     object_store::ObjectStoreError,
 > {
@@ -258,6 +260,7 @@ async fn fetch_and_parse_manifests(
     let entries = manifest::parse_manifest_list(&ml_path)
         .map_err(|e| object_store::ObjectStoreError::Http(format!("parse manifest list: {e}")))?;
 
+    let manifest_stats = manifest::manifest_stats_from_list(&entries);
     let mut data_files = Vec::new();
     let mut delete_files = Vec::new();
 
@@ -299,7 +302,7 @@ async fn fetch_and_parse_manifests(
     // Keep tmp alive until here.
     drop(tmp);
 
-    Ok((data_files, delete_files))
+    Ok((data_files, delete_files, manifest_stats))
 }
 
 fn parse_table_identifier(identifier: &str) -> Result<(String, String), CatalogError> {

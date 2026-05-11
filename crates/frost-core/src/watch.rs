@@ -85,6 +85,33 @@ pub struct StoredReport {
     pub report_json: String,
 }
 
+/// Rolling trend over a lookback window.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableTrend {
+    pub table_name: String,
+    pub lookback_days: i64,
+    pub sample_count: u64,
+    /// One of: `improving`, `degrading`, `flapping`, `stable`, `no_data`.
+    pub classification: String,
+    pub first_finding_count: u64,
+    pub last_finding_count: u64,
+    pub avg_finding_count: f64,
+    pub severity_transitions: u64,
+}
+
+/// A single point in the trend series.
+#[derive(Debug, Clone)]
+struct TrendPoint {
+    severity: String,
+    finding_count: u64,
+    #[allow(dead_code)]
+    critical_count: u64,
+    #[allow(dead_code)]
+    warning_count: u64,
+    #[allow(dead_code)]
+    checked_at: DateTime<Utc>,
+}
+
 /// A health change that triggered an alert.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchAlert {
@@ -326,6 +353,149 @@ impl WatchDb {
         Ok(results)
     }
 
+    /// Compute rolling trend signals for a single table over the last
+    /// `lookback_days` days.
+    ///
+    /// Returns aggregate counts and a coarse classification:
+    ///  - `improving` if the most-recent half had fewer findings than the older half
+    ///  - `degrading` if the most-recent half had more findings
+    ///  - `flapping` if severity transitions occurred ≥3× in the window
+    ///  - `stable` otherwise
+    pub fn compute_trend(
+        &self,
+        table_name: &str,
+        lookback_days: i64,
+    ) -> Result<TableTrend, WatchError> {
+        let cutoff = Utc::now() - chrono::Duration::days(lookback_days);
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT severity, finding_count, critical_count, warning_count, checked_at
+                 FROM check_history
+                 WHERE table_name = ?1 AND checked_at >= ?2
+                 ORDER BY checked_at ASC",
+            )
+            .map_err(WatchError::Sqlite)?;
+
+        let rows = stmt
+            .query_map(params![table_name, cutoff.to_rfc3339()], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            })
+            .map_err(WatchError::Sqlite)?;
+
+        let mut points: Vec<TrendPoint> = Vec::new();
+        for r in rows {
+            let (sev, finding, critical, warning, ts) = r.map_err(WatchError::Sqlite)?;
+            let checked_at = DateTime::parse_from_rfc3339(&ts)
+                .map(|d| d.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now());
+            points.push(TrendPoint {
+                severity: sev,
+                finding_count: finding as u64,
+                critical_count: critical as u64,
+                warning_count: warning as u64,
+                checked_at,
+            });
+        }
+
+        if points.is_empty() {
+            return Ok(TableTrend {
+                table_name: table_name.to_string(),
+                lookback_days,
+                sample_count: 0,
+                classification: "no_data".to_string(),
+                first_finding_count: 0,
+                last_finding_count: 0,
+                avg_finding_count: 0.0,
+                severity_transitions: 0,
+            });
+        }
+
+        let first = &points[0];
+        let last = points.last().unwrap();
+        let avg: f64 =
+            points.iter().map(|p| p.finding_count as f64).sum::<f64>() / points.len() as f64;
+
+        // Severity transitions: how many times severity changed across consecutive points.
+        let transitions = points
+            .windows(2)
+            .filter(|w| w[0].severity != w[1].severity)
+            .count();
+
+        // Half-window comparison.
+        let mid = points.len() / 2;
+        let older_avg: f64 = if mid == 0 {
+            avg
+        } else {
+            points[..mid]
+                .iter()
+                .map(|p| p.finding_count as f64)
+                .sum::<f64>()
+                / mid as f64
+        };
+        let newer_avg: f64 = if points.len() - mid == 0 {
+            avg
+        } else {
+            points[mid..]
+                .iter()
+                .map(|p| p.finding_count as f64)
+                .sum::<f64>()
+                / (points.len() - mid) as f64
+        };
+
+        let classification = if transitions >= 3 {
+            "flapping"
+        } else if newer_avg > older_avg + 0.5 {
+            "degrading"
+        } else if older_avg > newer_avg + 0.5 {
+            "improving"
+        } else {
+            "stable"
+        };
+
+        Ok(TableTrend {
+            table_name: table_name.to_string(),
+            lookback_days,
+            sample_count: points.len() as u64,
+            classification: classification.to_string(),
+            first_finding_count: first.finding_count,
+            last_finding_count: last.finding_count,
+            avg_finding_count: avg,
+            severity_transitions: transitions as u64,
+        })
+    }
+
+    /// Has an alert with the same `table_name` + `message` been recorded
+    /// within the last `cooldown_seconds`? Used by the alert pipeline to
+    /// suppress duplicate notifications when a check flaps.
+    pub fn alert_recently_fired(
+        &self,
+        table_name: &str,
+        message: &str,
+        cooldown_seconds: i64,
+    ) -> Result<bool, WatchError> {
+        let cutoff = Utc::now() - chrono::Duration::seconds(cooldown_seconds);
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT COUNT(*) FROM alerts
+                 WHERE table_name = ?1 AND message = ?2 AND alerted_at >= ?3",
+            )
+            .map_err(WatchError::Sqlite)?;
+        let count: i64 = stmt
+            .query_row(params![table_name, message, cutoff.to_rfc3339()], |row| {
+                row.get(0)
+            })
+            .map_err(WatchError::Sqlite)?;
+        Ok(count > 0)
+    }
+
     /// Get a summary of the latest health state for all watched tables.
     pub fn get_all_latest(&self) -> Result<Vec<StoredReport>, WatchError> {
         let mut stmt = self
@@ -428,16 +598,27 @@ pub async fn run_watch_cycle(
         // Compare to previous report.
         let previous = db.get_latest_report(table_id)?;
         if let Some(alert) = detect_changes(&report, previous.as_ref()) {
-            db.store_alert(&alert)?;
+            // Flap suppression: skip identical alerts that fired within the
+            // last hour. Keeps webhook noise down for checks that toggle
+            // around their threshold.
+            let recently = db
+                .alert_recently_fired(table_id, &alert.message, 3600)
+                .unwrap_or(false);
 
-            // Fire webhook if configured.
-            if let Some(ref url) = config.watch.webhook_url
-                && let Err(e) = send_webhook(url, &alert).await
-            {
-                tracing::error!("Watch: webhook failed for '{}': {}", table_id, e);
+            if !recently {
+                db.store_alert(&alert)?;
+                if let Some(ref url) = config.watch.webhook_url
+                    && let Err(e) = send_webhook(url, &alert).await
+                {
+                    tracing::error!("Watch: webhook failed for '{}': {}", table_id, e);
+                }
+                alerts.push(alert);
+            } else {
+                tracing::debug!(
+                    "Watch: suppressing duplicate alert for '{}' within cooldown",
+                    table_id,
+                );
             }
-
-            alerts.push(alert);
         }
 
         db.store_report(&report)?;
@@ -630,6 +811,117 @@ async fn send_webhook(url: &str, alert: &WatchAlert) -> Result<(), WatchError> {
 // ---------------------------------------------------------------------------
 // Error type
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::report::{HealthReport, OverallStatus, Severity, TableSummary};
+
+    fn report_with_severity(table: &str, sev: Severity, finding_count: usize) -> HealthReport {
+        let findings: Vec<crate::report::Finding> = (0..finding_count)
+            .map(|i| crate::report::Finding {
+                check_id: format!("dummy_{i}"),
+                check_name: "dummy".to_string(),
+                severity: sev,
+                message: "dummy".to_string(),
+                impact: String::new(),
+                fix_suggestion: None,
+                fix_command: None,
+                estimated_savings: None,
+                details: serde_json::json!({}),
+            })
+            .collect();
+        HealthReport {
+            table_name: table.to_string(),
+            location: "s3://x/y".to_string(),
+            summary: TableSummary {
+                snapshot_count: 1,
+                data_file_count: 1,
+                total_size_bytes: 0,
+                total_record_count: 0,
+            },
+            findings,
+            overall: OverallStatus {
+                severity: sev,
+                pass_count: 0,
+                warning_count: if sev == Severity::Warning {
+                    finding_count
+                } else {
+                    0
+                },
+                critical_count: if sev == Severity::Critical {
+                    finding_count
+                } else {
+                    0
+                },
+            },
+            generated_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn trend_no_data() {
+        let db = WatchDb::open_in_memory().unwrap();
+        let trend = db.compute_trend("missing.table", 7).unwrap();
+        assert_eq!(trend.classification, "no_data");
+        assert_eq!(trend.sample_count, 0);
+    }
+
+    #[test]
+    fn trend_classifies_degrading() {
+        let db = WatchDb::open_in_memory().unwrap();
+        // Older half: clean. Newer half: bunch of warnings.
+        for _ in 0..3 {
+            db.store_report(&report_with_severity("t", Severity::Pass, 0))
+                .unwrap();
+        }
+        for _ in 0..3 {
+            db.store_report(&report_with_severity("t", Severity::Warning, 5))
+                .unwrap();
+        }
+        let trend = db.compute_trend("t", 30).unwrap();
+        assert_eq!(trend.classification, "degrading");
+    }
+
+    #[test]
+    fn trend_classifies_flapping() {
+        let db = WatchDb::open_in_memory().unwrap();
+        for i in 0..8 {
+            let sev = if i % 2 == 0 {
+                Severity::Pass
+            } else {
+                Severity::Warning
+            };
+            db.store_report(&report_with_severity("flap", sev, 1))
+                .unwrap();
+        }
+        let trend = db.compute_trend("flap", 30).unwrap();
+        assert_eq!(trend.classification, "flapping");
+    }
+
+    #[test]
+    fn alert_recently_fired_dedupes() {
+        let db = WatchDb::open_in_memory().unwrap();
+        let alert = WatchAlert {
+            table_name: "t".into(),
+            previous_severity: "pass".into(),
+            current_severity: "warning".into(),
+            message: "small_files appeared".into(),
+            new_findings: vec!["small_files".into()],
+            resolved_findings: vec![],
+            alerted_at: Utc::now(),
+        };
+        db.store_alert(&alert).unwrap();
+        assert!(
+            db.alert_recently_fired("t", "small_files appeared", 3600)
+                .unwrap()
+        );
+        assert!(
+            !db.alert_recently_fired("t", "different message", 3600)
+                .unwrap()
+        );
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum WatchError {

@@ -140,6 +140,7 @@ mod tests {
                 timestamp_ms: (now - chrono::Duration::hours(i)).timestamp_millis(),
                 summary: Default::default(),
                 manifest_list: format!("s3://bucket/metadata/snap-{i}-manifest-list.avro"),
+                ..Default::default()
             })
             .collect();
 
@@ -157,6 +158,7 @@ mod tests {
                 timestamp_ms: (now - chrono::Duration::days(i)).timestamp_millis(),
                 summary: Default::default(),
                 manifest_list: format!("s3://bucket/metadata/snap-{i}-manifest-list.avro"),
+                ..Default::default()
             })
             .collect();
 

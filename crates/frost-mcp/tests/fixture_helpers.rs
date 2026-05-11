@@ -20,7 +20,7 @@ pub fn create_healthy_table(root: &Path) {
         .map(|i| {
             let name = format!("part-{:05}.parquet", i);
             let path = data_dir.join(&name);
-            std::fs::write(&path, &vec![0u8; 1024]).unwrap();
+            std::fs::write(&path, vec![0u8; 1024]).unwrap();
             (
                 path.to_string_lossy().to_string(),
                 128 * 1024 * 1024_i64,
@@ -86,13 +86,13 @@ pub fn create_small_files_table(root: &Path) {
     for i in 0..200 {
         let name = format!("micro-{:05}.parquet", i);
         let path = data_dir.join(&name);
-        std::fs::write(&path, &vec![0u8; 512]).unwrap();
+        std::fs::write(&path, vec![0u8; 512]).unwrap();
         data_files.push((path.to_string_lossy().to_string(), 100 * 1024_i64, 500_i64));
     }
     for i in 0..10 {
         let name = format!("normal-{:05}.parquet", i);
         let path = data_dir.join(&name);
-        std::fs::write(&path, &vec![0u8; 1024]).unwrap();
+        std::fs::write(&path, vec![0u8; 1024]).unwrap();
         data_files.push((
             path.to_string_lossy().to_string(),
             128 * 1024 * 1024_i64,

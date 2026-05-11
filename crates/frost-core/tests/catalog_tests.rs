@@ -27,9 +27,15 @@ async fn healthy_table_all_checks_pass() {
     let config = FrostConfig::default();
     let report = engine::check_table(&meta, &config);
 
-    // Healthy table should have all passes (except possibly freshness depending on timing).
+    // Healthy table should pass all checks. We exempt:
+    //  - freshness (depends on wall-clock proximity to the fixture timestamp)
+    //  - stats_coverage and sort_compliance (the test fixture writer
+    //    intentionally does not emit per-file column stats or sort_order_id;
+    //    those checks legitimately flag older writers, which is the point.
+    //    They have dedicated unit tests in their respective modules.)
+    let exempt = ["freshness", "stats_coverage", "sort_compliance"];
     for finding in &report.findings {
-        if finding.check_id != "freshness" {
+        if !exempt.contains(&finding.check_id.as_str()) {
             assert_eq!(
                 finding.severity,
                 Severity::Pass,

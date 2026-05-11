@@ -3,15 +3,21 @@
 //! Each check is a struct implementing the `HealthCheck` trait. The engine
 //! runs all enabled checks against a `TableMetadata` and collects findings.
 
+pub mod branch_health;
 pub mod delete_pressure;
+pub mod format_v1;
 pub mod freshness;
 pub mod metadata_size;
 pub mod orphan_files;
 pub mod partition_skew;
+pub mod partition_spec_evolution;
+pub mod properties_drift;
 pub mod schema_history;
 pub mod small_files;
 pub mod snapshot_bloat;
+pub mod sort_compliance;
 pub mod sort_order;
+pub mod stats_coverage;
 
 use crate::config::Thresholds;
 use crate::metadata::TableMetadata;
@@ -41,5 +47,12 @@ pub fn all_checks() -> Vec<Box<dyn HealthCheck>> {
         Box::new(metadata_size::MetadataSizeCheck),
         Box::new(sort_order::SortOrderCheck),
         Box::new(freshness::FreshnessCheck),
+        // v0.3.0 — depth checks driven by previously-discarded fields.
+        Box::new(format_v1::FormatV1Check),
+        Box::new(properties_drift::PropertiesDriftCheck),
+        Box::new(partition_spec_evolution::PartitionSpecEvolutionCheck),
+        Box::new(sort_compliance::SortComplianceCheck),
+        Box::new(stats_coverage::StatsCoverageCheck),
+        Box::new(branch_health::BranchHealthCheck),
     ]
 }

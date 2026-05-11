@@ -42,6 +42,22 @@ stale_table_hours = 48
 # Maximum total metadata size (bytes).
 max_metadata_bytes = 524_288_000        # 500 MB
 
+# Distinct partition specs (incl. retired ones) before flagging churn.
+max_partition_specs = 3
+
+# Minimum % of files that must honor the declared sort order.
+min_sort_compliance_pct = 80.0
+
+# Minimum % of files that must carry column statistics.
+min_stats_coverage_pct = 50.0
+
+# Branch is "stale" if its target snapshot is older than this many days.
+stale_branch_days = 30
+
+# Variance allowed between `write.target-file-size-bytes` and the
+# observed median data file size before flagging properties_drift (0–1).
+target_file_size_drift_pct = 0.5
+
 [cost]
 # S3 Standard storage pricing (USD per GB per month).
 s3_storage_per_gb_month = 0.023
@@ -51,6 +67,13 @@ s3_get_request_per_1000 = 0.0004
 
 # AWS region (for pricing context).
 region = "us-east-1"
+
+# Workload assumptions used to scale the cost model. Tune to your
+# real workload — these drive the small-files, manifest-planning, and
+# delete-merge cost line items.
+queries_per_day = 100.0
+compute_cost_per_cpu_hour = 0.05         # USD / CPU-hour
+avg_bytes_scanned_per_query = 1_073_741_824  # 1 GB
 
 [output]
 # Default output format: "pretty", "json", or "github-actions".

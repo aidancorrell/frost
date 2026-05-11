@@ -213,6 +213,8 @@ impl CatalogProvider for FilesystemCatalog {
                     if manifest_list_path.exists() {
                         match manifest::parse_manifest_list(&manifest_list_path) {
                             Ok(entries) => {
+                                table_meta.manifest_stats =
+                                    manifest::manifest_stats_from_list(&entries);
                                 // 4. Parse each manifest file.
                                 for entry in &entries {
                                     let manifest_path = resolve_file_path(

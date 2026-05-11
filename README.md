@@ -33,15 +33,21 @@ frost never reads data files. It only reads metadata (snapshot JSON, manifests, 
 
 | Check | What it detects | Severity |
 |---|---|---|
-| **small_files** | Files under 8 MB (configurable) | Warning/Critical |
+| **small_files** | Files under 8 MB; reports bytes-trapped + partition hotspots | Warning/Critical |
 | **snapshot_bloat** | Too many retained snapshots (>100) | Warning/Critical |
 | **orphan_files** | Unreferenced files in storage | Warning |
-| **partition_skew** | Partitions with >10x median file count | Warning |
-| **delete_pressure** | Outstanding position/equality delete files | Warning/Critical |
+| **partition_skew** | Skew in bytes/rows/files with p95/p99 distribution | Warning/Critical |
+| **delete_pressure** | Equality vs position delete files weighted by row-shadow | Warning/Critical |
 | **schema_history** | Dropped columns, type changes | Warning |
 | **metadata_size** | Metadata exceeding 500 MB | Warning/Critical |
-| **sort_order** | Missing sort order declarations | Info |
+| **sort_order** | Sort order declared (presence) | Info |
 | **freshness** | Hours since last snapshot commit | Warning |
+| **format_v1** | Tables still on Iceberg format-version 1 | Warning |
+| **properties_drift** | `write.target-file-size-bytes` declared vs observed median | Warning/Critical |
+| **partition_spec_evolution** | Spec churn + files left under retired specs | Warning/Critical |
+| **sort_compliance** | % of files honoring the declared sort order (uses `sort_order_id`) | Warning/Critical |
+| **stats_coverage** | % of files carrying column statistics | Warning/Critical |
+| **branch_health** | Per-branch/tag staleness; dangling refs | Warning/Critical |
 
 All thresholds are configurable in `frost.toml`.
 
@@ -186,9 +192,11 @@ Add to `.cursor/mcp.json` in your project:
 |---|---|---|---|
 | `check_table` | table identifier, optional check filter | Full health report (severity, findings, costs) | "Before I write to this table, is it healthy?" |
 | `check_catalog` | optional namespace filter | Summary across all tables, sorted by severity | "Which tables need attention?" |
-| `get_fix` | table identifier, finding ID | Exact Spark SQL CALL statement | "Generate the compaction command" |
-| `get_cost_report` | table identifier | Estimated monthly cost waste | "How much are we wasting?" |
-| `watch_status` | optional table filter | Watch state, recent alerts, health trends | "Has health changed since last check?" |
+| `check_fleet` | optional namespace filter, dormant_days | Namespace rollup, dormant tables, format-v1 tables, top offenders | "How healthy is my whole fleet?" |
+| `get_fix` | table identifier, finding ID | Exact Spark SQL CALL statement + estimated scope | "Generate the compaction command and tell me how big it is" |
+| `dry_run_fix` | table identifier, finding ID | Estimated scope (files/bytes/partitions) — no executable command | "Tell me the cost of fixing this before I commit" |
+| `get_cost_report` | table identifier | Estimated monthly cost waste with the assumptions used to compute it | "How much are we wasting?" |
+| `watch_status` | optional table, include_trend, trend_days | Watch state, recent alerts, rolling 7d/30d trend (improving/degrading/flapping) | "Is this table getting worse over time?" |
 
 ### Agent Workflow Example
 
